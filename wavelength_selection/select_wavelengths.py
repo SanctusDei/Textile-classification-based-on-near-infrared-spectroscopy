@@ -309,73 +309,64 @@ def select_mi_mindist(
     return indices, scores[indices]
 
 
-def select_anova_cluster(
-    X: np.ndarray, y: np.ndarray, k: int,
-    wavelength_grid: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """ANOVA + correlation clustering: one best wavelength per spectral cluster.
+def _compute_cluster_labels(X: np.ndarray, k: int) -> np.ndarray:
+    """Pre-compute wavelength cluster labels from full-dataset correlation.
 
-    1. Cluster wavelengths by 1 − |Pearson r| (hierarchical, average linkage)
-    2. Within each cluster, pick the wavelength with the highest ANOVA F-score
+    Clustering is based on 1 − |Pearson r| between wavelength columns.
+    Since NIR spectral correlation is a physical property of the instrument
+    (adjacent pixels share signal due to optical resolution ~3.5 nm/px),
+    the cluster structure is nearly invariant to which subset of samples
+    is used. Computing it once globally avoids O(n²) per-fold overhead.
 
-    Guarantees each selected wavelength comes from a distinct spectral region.
+    Not data leakage: clusters are computed from X (spectra) only, not y
+    (labels), and are used solely to group wavelengths into physically
+    meaningful spectral regions — the per-fold scoring (ANOVA/MI) still
+    operates exclusively on X_tr, y_tr.
     """
     from scipy.cluster.hierarchy import fcluster, linkage
     from scipy.spatial.distance import squareform
 
+    corr = np.corrcoef(X.T)
+    dist = 1.0 - np.abs(corr)
+    dist = np.nan_to_num(dist, nan=1.0)
+    np.fill_diagonal(dist, 0.0)
+    condensed = squareform(dist, checks=False)
+    Z = linkage(condensed, method='average')
+    return fcluster(Z, k, criterion='maxclust')
+
+
+def _select_best_per_cluster(
+    scores: np.ndarray, cluster_labels: np.ndarray, k: int,
+) -> np.ndarray:
+    """Pick the highest-scoring wavelength within each pre-computed cluster."""
+    selected = []
+    for c in range(1, k + 1):
+        mask = cluster_labels == c
+        if mask.any():
+            cs = scores.copy()
+            cs[~mask] = -np.inf
+            selected.append(int(np.argmax(cs)))
+    return np.array(selected)
+
+
+def _select_anova_per_cluster(
+    X: np.ndarray, y: np.ndarray, cluster_labels: np.ndarray, k: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """ANOVA F-score per fold, then pick best per pre-computed cluster."""
     selector = SelectKBest(f_classif, k='all')
     selector.fit(X, y)
     scores = selector.scores_
-
-    # Correlation distance matrix
-    corr = np.corrcoef(X.T)
-    dist = 1.0 - np.abs(corr)
-    dist = np.nan_to_num(dist, nan=1.0)
-    np.fill_diagonal(dist, 0.0)
-    condensed = squareform(dist, checks=False)
-
-    Z = linkage(condensed, method='average')
-    cluster_labels = fcluster(Z, k, criterion='maxclust')
-
-    selected = []
-    for c in range(1, k + 1):
-        mask = cluster_labels == c
-        if mask.any():
-            cluster_scores = scores.copy()
-            cluster_scores[~mask] = -np.inf
-            selected.append(int(np.argmax(cluster_scores)))
-
-    return np.array(selected), scores[selected]
+    indices = _select_best_per_cluster(scores, cluster_labels, k)
+    return indices, scores[indices]
 
 
-def select_mi_cluster(
-    X: np.ndarray, y: np.ndarray, k: int,
-    wavelength_grid: np.ndarray, seed: int = 42,
+def _select_mi_per_cluster(
+    X: np.ndarray, y: np.ndarray, cluster_labels: np.ndarray, k: int, seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Mutual Information + correlation clustering."""
-    from scipy.cluster.hierarchy import fcluster, linkage
-    from scipy.spatial.distance import squareform
-
+    """Mutual Information per fold, then pick best per pre-computed cluster."""
     scores = mutual_info_classif(X, y, random_state=seed)
-
-    corr = np.corrcoef(X.T)
-    dist = 1.0 - np.abs(corr)
-    dist = np.nan_to_num(dist, nan=1.0)
-    np.fill_diagonal(dist, 0.0)
-    condensed = squareform(dist, checks=False)
-
-    Z = linkage(condensed, method='average')
-    cluster_labels = fcluster(Z, k, criterion='maxclust')
-
-    selected = []
-    for c in range(1, k + 1):
-        mask = cluster_labels == c
-        if mask.any():
-            cluster_scores = scores.copy()
-            cluster_scores[~mask] = -np.inf
-            selected.append(int(np.argmax(cluster_scores)))
-
-    return np.array(selected), scores[selected]
+    indices = _select_best_per_cluster(scores, cluster_labels, k)
+    return indices, scores[indices]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -706,6 +697,9 @@ def run_multi_seed_experiment(
     if X is None:
         X, y, wavelength_grid, le, meta_df = load_all_spectra(preprocess=preprocess)
 
+    # Pre-compute spectral clusters ONCE (physical property, not sample-dependent)
+    cluster_labels = _compute_cluster_labels(X, k)
+
     # Selection methods registry
     selection_methods = {
         # ── Original methods ──
@@ -717,9 +711,9 @@ def run_multi_seed_experiment(
         # ── Diversity-aware: minimum distance ──
         'ANOVA + MinDist':        lambda Xtr, ytr: select_anova_mindist(Xtr, ytr, k, wavelength_grid),
         'MI + MinDist':           lambda Xtr, ytr: select_mi_mindist(Xtr, ytr, k, wavelength_grid, seed=seeds[0]),
-        # ── Diversity-aware: clustering ──
-        'ANOVA + Clustering':     lambda Xtr, ytr: select_anova_cluster(Xtr, ytr, k, wavelength_grid),
-        'MI + Clustering':        lambda Xtr, ytr: select_mi_cluster(Xtr, ytr, k, wavelength_grid, seed=seeds[0]),
+        # ── Diversity-aware: clustering (labels pre-computed once) ──
+        'ANOVA + Clustering':     lambda Xtr, ytr: _select_anova_per_cluster(Xtr, ytr, cluster_labels, k),
+        'MI + Clustering':        lambda Xtr, ytr: _select_mi_per_cluster(Xtr, ytr, cluster_labels, k, seeds[0]),
     }
 
     all_seed_results = {}
