@@ -1,0 +1,12 @@
+# IDE and tool configs
+.claude/
+.vscode/
+
+# Code - exclude Python scripts
+wavelength_selection/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
