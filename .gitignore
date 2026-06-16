@@ -2,8 +2,8 @@
 .claude/
 .vscode/
 
-# Code - exclude Python scripts
-wavelength_selection/
+# Generated figures
+figures/
 
 # Python artifacts
 __pycache__/
