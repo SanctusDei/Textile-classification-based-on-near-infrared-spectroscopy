@@ -243,7 +243,6 @@ def select_rf_importance(X: np.ndarray, y: np.ndarray, k: int, seed: int = 42) -
     indices = np.argsort(rf.feature_importances_)[::-1][:k]
     return indices, rf.feature_importances_[indices]
 
-
 def select_sequential_forward(X: np.ndarray, y: np.ndarray, k: int, seed: int = 42) -> Tuple[np.ndarray, np.ndarray]:
     """Sequential Forward Selection: greedy wrapper, O(k·n·CV). Slow but precise."""
     scaler = StandardScaler()
@@ -256,6 +255,127 @@ def select_sequential_forward(X: np.ndarray, y: np.ndarray, k: int, seed: int = 
     sfs.fit(X_s, y)
     indices = np.where(sfs.support_)[0]
     return indices, np.ones(k)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Spectral De-Redundancy: Minimum Distance & Clustering
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _greedy_min_distance(
+    scores: np.ndarray,
+    wavelength_grid: np.ndarray,
+    k: int,
+    min_dist_nm: float = 30.0,
+) -> np.ndarray:
+    """Greedy top-k selection enforcing minimum spectral distance.
+
+    Sorts wavelengths by score descending, then iteratively selects the
+    highest-scoring candidate that is ≥ min_dist_nm away from all
+    previously selected wavelengths.
+
+    This prevents selecting adjacent pixels that carry redundant
+    information (typical NIR absorption peak width: 20–50 nm).
+    """
+    order = np.argsort(scores)[::-1]
+    selected = []
+    for idx in order:
+        if len(selected) >= k:
+            break
+        candidate_nm = wavelength_grid[idx]
+        if all(abs(wavelength_grid[s] - candidate_nm) >= min_dist_nm for s in selected):
+            selected.append(idx)
+    return np.array(selected)
+
+
+def select_anova_mindist(
+    X: np.ndarray, y: np.ndarray, k: int,
+    wavelength_grid: np.ndarray, min_dist_nm: float = 30.0,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """ANOVA F-score with minimum spectral distance constraint."""
+    selector = SelectKBest(f_classif, k='all')
+    selector.fit(X, y)
+    scores = selector.scores_
+    indices = _greedy_min_distance(scores, wavelength_grid, k, min_dist_nm)
+    return indices, scores[indices]
+
+
+def select_mi_mindist(
+    X: np.ndarray, y: np.ndarray, k: int,
+    wavelength_grid: np.ndarray, min_dist_nm: float = 30.0, seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Mutual Information with minimum spectral distance constraint."""
+    scores = mutual_info_classif(X, y, random_state=seed)
+    indices = _greedy_min_distance(scores, wavelength_grid, k, min_dist_nm)
+    return indices, scores[indices]
+
+
+def select_anova_cluster(
+    X: np.ndarray, y: np.ndarray, k: int,
+    wavelength_grid: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """ANOVA + correlation clustering: one best wavelength per spectral cluster.
+
+    1. Cluster wavelengths by 1 − |Pearson r| (hierarchical, average linkage)
+    2. Within each cluster, pick the wavelength with the highest ANOVA F-score
+
+    Guarantees each selected wavelength comes from a distinct spectral region.
+    """
+    from scipy.cluster.hierarchy import fcluster, linkage
+    from scipy.spatial.distance import squareform
+
+    selector = SelectKBest(f_classif, k='all')
+    selector.fit(X, y)
+    scores = selector.scores_
+
+    # Correlation distance matrix
+    corr = np.corrcoef(X.T)
+    dist = 1.0 - np.abs(corr)
+    dist = np.nan_to_num(dist, nan=1.0)
+    np.fill_diagonal(dist, 0.0)
+    condensed = squareform(dist, checks=False)
+
+    Z = linkage(condensed, method='average')
+    cluster_labels = fcluster(Z, k, criterion='maxclust')
+
+    selected = []
+    for c in range(1, k + 1):
+        mask = cluster_labels == c
+        if mask.any():
+            cluster_scores = scores.copy()
+            cluster_scores[~mask] = -np.inf
+            selected.append(int(np.argmax(cluster_scores)))
+
+    return np.array(selected), scores[selected]
+
+
+def select_mi_cluster(
+    X: np.ndarray, y: np.ndarray, k: int,
+    wavelength_grid: np.ndarray, seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Mutual Information + correlation clustering."""
+    from scipy.cluster.hierarchy import fcluster, linkage
+    from scipy.spatial.distance import squareform
+
+    scores = mutual_info_classif(X, y, random_state=seed)
+
+    corr = np.corrcoef(X.T)
+    dist = 1.0 - np.abs(corr)
+    dist = np.nan_to_num(dist, nan=1.0)
+    np.fill_diagonal(dist, 0.0)
+    condensed = squareform(dist, checks=False)
+
+    Z = linkage(condensed, method='average')
+    cluster_labels = fcluster(Z, k, criterion='maxclust')
+
+    selected = []
+    for c in range(1, k + 1):
+        mask = cluster_labels == c
+        if mask.any():
+            cluster_scores = scores.copy()
+            cluster_scores[~mask] = -np.inf
+            selected.append(int(np.argmax(cluster_scores)))
+
+    return np.array(selected), scores[selected]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -588,11 +708,18 @@ def run_multi_seed_experiment(
 
     # Selection methods registry
     selection_methods = {
+        # ── Original methods ──
         'ANOVA F-score':          lambda Xtr, ytr: select_anova(Xtr, ytr, k),
         'Mutual Information':     lambda Xtr, ytr: select_mutual_info(Xtr, ytr, k, seeds[0]),
         'RFE (Linear SVM)':       lambda Xtr, ytr: select_rfe_svm(Xtr, ytr, k),
         'L1 LogisticRegression':  lambda Xtr, ytr: select_l1_logreg(Xtr, ytr, k),
         'Random Forest Imp.':     lambda Xtr, ytr: select_rf_importance(Xtr, ytr, k, seeds[0]),
+        # ── Diversity-aware: minimum distance ──
+        'ANOVA + MinDist':        lambda Xtr, ytr: select_anova_mindist(Xtr, ytr, k, wavelength_grid),
+        'MI + MinDist':           lambda Xtr, ytr: select_mi_mindist(Xtr, ytr, k, wavelength_grid, seed=seeds[0]),
+        # ── Diversity-aware: clustering ──
+        'ANOVA + Clustering':     lambda Xtr, ytr: select_anova_cluster(Xtr, ytr, k, wavelength_grid),
+        'MI + Clustering':        lambda Xtr, ytr: select_mi_cluster(Xtr, ytr, k, wavelength_grid, seed=seeds[0]),
     }
 
     all_seed_results = {}
