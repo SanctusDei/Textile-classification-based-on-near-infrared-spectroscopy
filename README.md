@@ -1,6 +1,6 @@
 # Textile Classification Dataset — NIR Spectroscopy
 
-Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected using a **Hadamard 1** spectrometer (SN 6460024).
+Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected using a **DLP NIRScan nano** spectrometer.
 
 ## Dataset Overview
 
@@ -10,7 +10,7 @@ Near-infrared (NIR) spectroscopy dataset for textile fiber classification, colle
 | **Spectral range** | 900–1700 nm |
 | **Spectral bands** | 228 pixels |
 | **Classes** | 6 |
-| **Instrument** | Hadamard 1 spectrometer |
+| **Instrument** | DLP NIRScan nano |
 | **Additional data** | 40 blend spectra, 132 fabric images |
 
 ## Classes
