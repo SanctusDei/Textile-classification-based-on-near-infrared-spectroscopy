@@ -236,7 +236,6 @@
 
   O–H band is **completely missed** — Cotton loses its chemical marker. The model compensates by using two C–H bands (1st + 2nd overtone) for PET, and relies on N–H for Nylon, but Cotton vs PET discrimination becomes fragile without the O–H channel. Accuracy drops 0.0188 below k=5.
 
-  > **Why band-level?** Single-wavelength "consensus" (strict intersection) is misleading: 1655 nm and 1658 nm are treated as different features when they belong to the same C–H 1st overtone band. At k=5, L1 LogReg has only 1.0 strict-consensus wavelengths on average (Jaccard = 0.08), yet 3/4 chemical bands are selected at ≥80% frequency. The absorption band is the feature — not the individual sampling point.
 
   ### Statistical Significance
 
