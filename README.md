@@ -44,7 +44,7 @@ python wavelength_selection/select_wavelengths.py --k 3 --n_seeds 5 --preprocess
 | **Classes** | 3 (Cotton, Nylon, Polyester) |
 | **Unique swatches** | 35 physical fabric specimens |
 | **Instrument** | TI DLP NIRScan nano (SN 6460024) |
-| **Additional data** | 40 blend spectra, 10 background spectra, 132 fabric images |
+| **Additional data** | 40 blend spectra, 10 background spectra, 60 fabric images |
 
 ### Classes
 
@@ -91,7 +91,7 @@ Each CSV file contains a **22-line metadata header** followed by 228 rows of spe
   - Cotton/Polyester 55:45, Cotton/Polyester 80:20
   - Nylon/Polyester 30:70, Wool/Polyester 35:65
 - **10 PVC background spectra** — reference measurements for normalization
-- **132 fabric images** (`.jpg`) — visual documentation of measured swatches (across `data/raw/image/`, `data/preprocessing/total/`, and `data/preprocessing/Blends/images/`)
+- **60 fabric images** (`.jpg`) — visual documentation of measured swatches (across `data/raw/image/`, `data/preprocessing/total/`, and `data/preprocessing/Blends/images/`)
 
 ---
 
