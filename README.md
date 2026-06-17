@@ -1,6 +1,6 @@
 # Textile Fiber Classification via Near-Infrared Spectroscopy
 
-> **From 228-pixel lab spectrometer to 2–4 LEDs — wavelength selection for portable NIR textile identification.**
+> **From 228-point lab spectrometer to 2–4 LEDs — wavelength selection for portable NIR textile identification.**
 
 Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 sampling points). The full dataset contains 188 pure-fiber spectra across 6 classes, plus 40 blend spectra and 10 background spectra. The wavelength selection experiment uses 173 spectra from 3 classes. The project investigates feature selection methods to compress the full spectrum into a handful of key wavelengths, enabling deployment on low-cost portable hardware.
 
@@ -112,17 +112,17 @@ The following data are included in the repository but not used by the wavelength
 
 ### Motivation
 
-A lab-grade NIR spectrometer (228-pixel InGaAs array) costs **$2,000+**. By identifying k = 3–10 discriminative wavelengths, we can replace it with **fixed-wavelength LEDs + photodiodes** (~$30–50 per LED), reducing the bill of materials by **94–98%** while maintaining near-perfect classification accuracy.
+A lab-grade NIR spectrometer (228-point InGaAs array) costs **$2,000+**. By identifying k = 3–10 discriminative wavelengths, we can replace it with **fixed-wavelength LEDs + photodiodes** (~$30–50 per LED), reducing the bill of materials by **94–98%** while maintaining near-perfect classification accuracy.
 
-### The Adjacent-Pixel Problem
+### The Adjacent-Point Problem
 
-On raw absorbance spectra, univariate feature selection methods (ANOVA F-score, Mutual Information) suffer from a critical flaw: NIR absorption peaks span 20–50 nm (6–14 pixels at 3.5 nm/px resolution), creating strong collinearity between adjacent wavelengths. These methods rank all pixels within the same absorption band as "top-k," **collapsing k selections into a single chemical information channel**.
+On raw absorbance spectra, univariate feature selection methods (ANOVA F-score, Mutual Information) suffer from a critical flaw: NIR absorption peaks span 20–50 nm (6–14 sampling points at 3.5 nm/point resolution), creating strong collinearity between adjacent wavelengths. These methods rank all points within the same absorption band as "top-k," **collapsing k selections into a single chemical information channel**.
 
 Concretely, without countermeasures, ANOVA on raw spectra tends to select multiple wavelengths from the same C–H overtone band (e.g., 1190–1210 nm), yielding an effective spectral spread of only a few nanometers — compared to ~170 nm for random selection. This redundancy degrades classification accuracy because the model sees only one chemical dimension instead of k complementary ones.
 
-### Mitigating Adjacent-Pixel Collinearity
+### Mitigating Adjacent-Point Collinearity
 
-**Savitzky-Golay 1st-derivative preprocessing** (window=11, polyorder=3) is the primary mitigation in the current pipeline: it removes baseline drift and decorrelates adjacent pixels, largely resolving the redundancy problem before feature selection begins.
+**Savitzky-Golay 1st-derivative preprocessing** (window=11, polyorder=3) is the primary mitigation in the current pipeline: it removes baseline drift and decorrelates adjacent sampling points, largely resolving the redundancy problem before feature selection begins.
 
 For stronger guarantees, two additional strategies are implemented in the code as optional extensions (not active in the default 5-method suite):
 
@@ -202,7 +202,7 @@ Method spread at k=5: RFE (0.9819) through ANOVA F-score (0.9063 — actually be
 
 | Preprocessing | Effect on Feature Selection |
 |---------------|----------------------------|
-| `none` (raw) | Adjacent-pixel collinearity degrades univariate rankings |
+| `none` (raw) | Adjacent-point collinearity degrades univariate rankings |
 | `savgol` | Smoothing reduces noise, preserves peak shapes |
 | `savgol_1deriv` | **Recommended** — removes baseline drift, sharpens peaks |
 | `savgol_2deriv` | Further sharpens but amplifies noise |
@@ -228,7 +228,7 @@ Three chemically distinct channels (C–H, O–H, N–H) together discriminate C
 | **1506** | N–H 1st overtone | Nylon (amide) |
 | **1510** | N–H 1st overtone | Nylon (amide) |
 
-> ⚠ Only 2 consensus wavelengths (3rd did not reach majority across 5 seeds × 5 folds). Both are adjacent N–H band pixels — even with SG 1st-derivative, k=3 struggles with the adjacent-pixel problem. Accuracy drops to 0.915 (gap: −0.029 vs Teacher), and the single chemical channel cannot cleanly separate all 3 classes.
+> ⚠ Only 2 consensus wavelengths (3rd did not reach majority across 5 seeds × 5 folds). Both are adjacent N–H band sampling points — even with SG 1st-derivative, k=3 struggles with the adjacent-point problem. Accuracy drops to 0.915 (gap: −0.029 vs Teacher), and the single chemical channel cannot cleanly separate all 3 classes.
 
 ### Statistical Significance
 
