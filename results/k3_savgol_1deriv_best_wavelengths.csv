@@ -1,4 +1,4 @@
-Rank,Index,Wavelength_nm,Frequency_pct,Selection_count,Interpretation
-1,166,1509.5,47,7/15,"N–H 1st overtone (amide — Wool, Nylon, Silk)"
-2,70,1173.4,40,6/15,"C–H 2nd overtone (polymer backbone — PET, PA)"
-3,168,1515.9,33,5/15,"N–H 1st overtone (amide — Wool, Nylon, Silk)"
+Rank,Index,Wavelength_nm,Frequency_pct,Selection_count,Chemical_band,Interpretation
+1,166,1509.5,47,7/15,N–H 1st overtone,"N–H 1st overtone (amide — Wool, Nylon, Silk)"
+2,70,1173.4,40,6/15,C–H 2nd overtone,"C–H 2nd overtone (polymer backbone — PET, PA)"
+3,168,1515.9,33,5/15,N–H 1st overtone,"N–H 1st overtone (amide — Wool, Nylon, Silk)"

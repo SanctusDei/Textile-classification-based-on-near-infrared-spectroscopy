@@ -190,45 +190,53 @@
 
   ### Selected Wavelengths & Chemical Interpretation
 
-  **k=5 — L1 LogisticRegression, best method (Pseudo: 0.9836):**
+  NIR absorption bands (20–60 nm wide) are the physically meaningful unit — adjacent sampling points within the same band are interchangeable. The table below reports **band-level selection frequency**: the percentage of runs (seeds × folds) where at least one wavelength within each chemical band was selected.
 
-  Selection frequency across 25 runs (5 seeds × 5 folds):
+  #### Chemical Band ↔ Textile Fiber Mapping
 
-  | λ (nm) | Freq. | Chemical Bond | Distinguishes |
-  |--------|:-----:|---------------|---------------|
-  | **1655** | 100% | C–H 1st overtone | PET (aromatic CH); O–H (Cotton) |
-  | **1522** | 64% | N–H 1st overtone | Nylon (amide) |
-  | **1413** | 60% | O–H 1st overtone | Cotton (cellulose/water); C–H combination |
-  | **1658** | 56% | C–H 1st overtone | PET (aromatic CH); O–H (Cotton) |
-  | **1519** | 48% | N–H 1st overtone | Nylon (amide) |
+  | Band | Range | Marker For | Key Functional Group |
+  |------|-------|------------|---------------------|
+  | O–H 1st overtone | 1350–1450 nm | **Cotton** | Cellulose –OH, water |
+  | N–H 1st overtone | 1450–1550 nm | **Nylon** | Amide –CONH– |
+  | C–H 1st overtone | 1640–1700 nm | **PET** | Aromatic C–H, –CH₂– |
+  | C–H 2nd overtone | 1150–1250 nm | PET, PA | Polymer backbone |
 
-  Three chemically distinct bands cover all three classes: C–H 1st overtone (~1655 nm) for PET, N–H 1st overtone (~1520 nm) for Nylon, and O–H 1st overtone (~1415 nm) for Cotton. The 1658 nm and 1519 nm picks are adjacent sampling points within the same bands — the L1 penalty reliably selects from the correct band but the exact index varies by ±5 nm across folds.
+  #### Band Selection Frequency by Wavelength Budget
 
-  **k=10 — L1 LogisticRegression, best method (Pseudo: 0.9836):**
+  **k=5 — L1 LogisticRegression (Pseudo: 0.9836):**
 
-  Selection frequency across 25 runs (5 seeds × 5 folds):
+  | Band | Freq. | Marker For |
+  |------|:-----:|------------|
+  | C–H 1st overtone | 100% (25/25) | PET |
+  | N–H 1st overtone | 96% (24/25) | Nylon |
+  | O–H 1st overtone | 80% (20/25) | Cotton |
+  | C–H 2nd overtone | 0% (0/25) | — |
 
-  | λ (nm) | Freq. | Chemical Bond | Distinguishes |
-  |--------|:-----:|---------------|---------------|
-  | **1655** | 100% | C–H 1st overtone | PET (aromatic CH); O–H (Cotton) |
-  | **1416** | 96% | O–H 1st overtone | Cotton (cellulose/water); C–H combination |
-  | **1413** | 84% | O–H 1st overtone | Cotton (cellulose/water); C–H combination |
-  | **1658** | 84% | C–H 1st overtone | PET (aromatic CH); O–H (Cotton) |
-  | **1522** | 80% | N–H 1st overtone | Nylon (amide) |
+  Three bands, three classes — a near-perfect one-to-one mapping. C–H 1st overtone is the most stable feature (100%), serving as the primary PET marker. N–H band (96%) identifies Nylon via the amide group. O–H band (80%) captures Cotton via cellulose hydroxyl absorption. C–H 2nd overtone is never selected at k=5 — the 1st overtone band is sufficient for PET discrimination.
 
-  With k=10, L1 LogReg consistently selects from all three chemical bands (C–H, O–H, N–H) at ≥80% frequency. However, k=10 achieves identical accuracy to k=5 (0.9836) — the extra 5 wavelengths are largely redundant adjacent sampling points within the same absorption bands. This confirms that **five chemically distinct wavelengths are sufficient** for robust 3-class textile discrimination.
+  **k=10 — L1 LogisticRegression (Pseudo: 0.9836):**
 
-  **k=3 — RFE (Linear SVM), best method (Pseudo: 0.9648):**
+  | Band | Freq. | Marker For |
+  |------|:-----:|------------|
+  | O–H 1st overtone | 100% (25/25) | Cotton |
+  | N–H 1st overtone | 100% (25/25) | Nylon |
+  | C–H 1st overtone | 100% (25/25) | PET |
+  | C–H 2nd overtone | 4% (1/25) | — |
 
-  Selection frequency across 15 runs (3 seeds × 5 folds):
+  All three core bands reach 100% frequency — but accuracy is identical to k=5. The extra budget is spent on redundant adjacent sampling points within the same bands. This proves that **three chemical bands are sufficient** for robust 3-class discrimination.
 
-  | λ (nm) | Freq. | Chemical Bond | Distinguishes |
-  |--------|:-----:|---------------|---------------|
-  | **1510** | 47% | N–H 1st overtone | Nylon (amide) |
-  | **1173** | 40% | C–H 2nd overtone | PET, PA (polymer backbone) |
-  | **1516** | 33% | N–H 1st overtone | Nylon (amide) |
+  **k=3 — RFE (Linear SVM) (Pseudo: 0.9648):**
 
-  Only 3 wavelengths exceed 30% selection frequency, and two belong to the same N–H band. The O–H band (Cotton marker) is missed entirely, making Cotton vs PET discrimination fragile. With k=3, accuracy drops to 0.9648 and selection frequencies are low (≤47%), indicating that **k=3 is insufficient for robust 3-class discrimination**.
+  | Band | Freq. | Marker For |
+  |------|:-----:|------------|
+  | N–H 1st overtone | 93% (14/15) | Nylon |
+  | C–H 1st overtone | 67% (10/15) | PET |
+  | C–H 2nd overtone | 60% (9/15) | PET, PA |
+  | O–H 1st overtone | **0%** (0/15) | Cotton ✗ |
+
+  O–H band is **completely missed** — Cotton loses its chemical marker. The model compensates by using two C–H bands (1st + 2nd overtone) for PET, and relies on N–H for Nylon, but Cotton vs PET discrimination becomes fragile without the O–H channel. Accuracy drops 0.0188 below k=5.
+
+  > **Why band-level?** Single-wavelength "consensus" (strict intersection) is misleading: 1655 nm and 1658 nm are treated as different features when they belong to the same C–H 1st overtone band. At k=5, L1 LogReg has only 1.0 strict-consensus wavelengths on average (Jaccard = 0.08), yet 3/4 chemical bands are selected at ≥80% frequency. The absorption band is the feature — not the individual sampling point.
 
   ### Statistical Significance
 

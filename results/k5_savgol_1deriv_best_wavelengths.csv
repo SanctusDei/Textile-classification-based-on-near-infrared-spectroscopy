@@ -1,6 +1,6 @@
-Rank,Index,Wavelength_nm,Frequency_pct,Selection_count,Interpretation
-1,212,1655.2,100,25/25,"C–H 1st overtone (CH3, CH2, aromatic — PET); O–H (Cotton)"
-2,170,1522.3,64,16/25,"N–H 1st overtone (amide — Wool, Nylon, Silk)"
-3,137,1412.6,60,15/25,O–H 1st overtone (cellulose/water — Cotton); C–H combination
-4,213,1658.2,56,14/25,"C–H 1st overtone (CH3, CH2, aromatic — PET); O–H (Cotton)"
-5,169,1519.1,48,12/25,"N–H 1st overtone (amide — Wool, Nylon, Silk)"
+Rank,Index,Wavelength_nm,Frequency_pct,Selection_count,Chemical_band,Interpretation
+1,212,1655.2,100,25/25,C–H 1st overtone,"C–H 1st overtone (CH3, CH2, aromatic — PET); O–H (Cotton)"
+2,170,1522.3,64,16/25,N–H 1st overtone,"N–H 1st overtone (amide — Wool, Nylon, Silk)"
+3,137,1412.6,60,15/25,O–H 1st overtone,O–H 1st overtone (cellulose/water — Cotton); C–H combination
+4,213,1658.2,56,14/25,C–H 1st overtone,"C–H 1st overtone (CH3, CH2, aromatic — PET); O–H (Cotton)"
+5,169,1519.1,48,12/25,N–H 1st overtone,"N–H 1st overtone (amide — Wool, Nylon, Silk)"

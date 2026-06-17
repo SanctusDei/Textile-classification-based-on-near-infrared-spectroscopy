@@ -19,6 +19,24 @@
     70,
     168
   ],
+  "band_frequencies": {
+    "N–H 1st overtone": {
+      "frequency_pct": 93.3,
+      "marker_for": "Nylon (amide)"
+    },
+    "C–H 1st overtone": {
+      "frequency_pct": 66.7,
+      "marker_for": "PET (aromatic CH); O–H (Cotton)"
+    },
+    "C–H 2nd overtone": {
+      "frequency_pct": 60.0,
+      "marker_for": "PET, PA (polymer backbone)"
+    },
+    "O–H 1st overtone": {
+      "frequency_pct": 0.0,
+      "marker_for": "Cotton (cellulose/water)"
+    }
+  },
   "class_names": [
     "2",
     "3",

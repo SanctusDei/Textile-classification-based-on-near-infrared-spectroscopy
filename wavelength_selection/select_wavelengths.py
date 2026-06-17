@@ -507,6 +507,84 @@ def analyze_cross_seed_frequency(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Chemical Band Definitions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# NIR absorption bands for textile fiber discrimination.
+# Broad bands (20–60 nm wide) are the physically meaningful unit —
+# adjacent sampling points within the same band are interchangeable.
+CHEMICAL_BANDS = [
+    {'name': 'C–H 2nd overtone',    'range': (1150, 1250), 'marker_for': 'PET, PA (polymer backbone)'},
+    {'name': 'O–H 1st overtone',    'range': (1350, 1450), 'marker_for': 'Cotton (cellulose/water)'},
+    {'name': 'N–H 1st overtone',    'range': (1450, 1550), 'marker_for': 'Nylon (amide)'},
+    {'name': 'C–H 1st overtone',    'range': (1640, 1700), 'marker_for': 'PET (aromatic CH); O–H (Cotton)'},
+]
+
+
+def map_wavelength_to_band(wl_nm: float) -> Optional[str]:
+    """Map a wavelength (nm) to its chemical absorption band name."""
+    for band in CHEMICAL_BANDS:
+        lo, hi = band['range']
+        if lo <= wl_nm <= hi:
+            return band['name']
+    return None
+
+
+def analyze_band_frequency(
+    all_selected_sets_raw: List[List[set]],
+    wavelength_grid: np.ndarray,
+) -> Dict:
+    """Analyze selection frequency at the chemical BAND level.
+
+    Instead of counting individual wavelength indices (which treats
+    1655 nm and 1658 nm as different features), this counts how often
+    ANY wavelength within each chemical absorption band is selected.
+
+    This is the physically meaningful stability metric for NIR spectroscopy:
+    the absorption band is the feature, not the individual sampling point.
+
+    Returns:
+        band_frequencies: {band_name: pct} — % of runs where band was selected
+        band_counts:      {band_name: (n_runs_with_band, total_runs)}
+        top_bands:        list of (band_name, pct, marker_for) sorted by pct
+    """
+    n_seeds = len(all_selected_sets_raw)
+    n_folds = len(all_selected_sets_raw[0]) if all_selected_sets_raw else 5
+    total_runs = n_seeds * n_folds
+
+    # Count how many runs each band appears in (at least one wavelength from the band)
+    band_counts = {band['name']: 0 for band in CHEMICAL_BANDS}
+    for seed_sets in all_selected_sets_raw:
+        for fold_set in seed_sets:
+            selected_wl_nm = set(wavelength_grid[idx] for idx in fold_set)
+            for band in CHEMICAL_BANDS:
+                lo, hi = band['range']
+                # Does any selected wavelength fall within this band?
+                if any(lo <= wl <= hi for wl in selected_wl_nm):
+                    band_counts[band['name']] += 1
+
+    band_frequencies = {
+        name: count / total_runs * 100
+        for name, count in band_counts.items()
+    }
+
+    # Top bands sorted by frequency
+    marker_map = {b['name']: b['marker_for'] for b in CHEMICAL_BANDS}
+    top_bands = sorted(
+        [(name, band_frequencies[name], marker_map[name])
+         for name in band_frequencies],
+        key=lambda x: -x[1]
+    )
+
+    return {
+        'band_frequencies': band_frequencies,
+        'band_counts': {name: (count, total_runs) for name, count in band_counts.items()},
+        'top_bands': top_bands,
+        'total_runs': total_runs,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Statistical Tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -860,35 +938,46 @@ def run_multi_seed_experiment(
     # ── Best Method: Wavelengths & Physical Interpretation ──
     print(f"\n  ── Best Method: {best_method} ──")
 
-    # Cross-seed frequency analysis (the proper stability metric)
     best_raw_sets = all_selected_sets_raw[best_method]
-    freq_analysis = analyze_cross_seed_frequency(best_raw_sets, wavelength_grid, k)
 
+    # ── Band-level frequency (the physically meaningful metric) ──
+    band_analysis = analyze_band_frequency(best_raw_sets, wavelength_grid)
+    print(f"    Chemical band selection frequency "
+          f"({band_analysis['total_runs']} runs, {len(seeds)} seeds × 5 folds):")
+    for band_name, pct, marker_for in band_analysis['top_bands']:
+        count, total = band_analysis['band_counts'][band_name]
+        bar = '█' * int(pct / 5) + '░' * (20 - int(pct / 5))
+        print(f"      {band_name:<20s}  {bar}  {pct:>5.0f}% ({count}/{total})  —  {marker_for}")
+
+    # ── Single-wavelength frequency (supplementary detail) ──
+    freq_analysis = analyze_cross_seed_frequency(best_raw_sets, wavelength_grid, k)
     top_wl_indices = [item[0] for item in freq_analysis['top_wavelengths']]
     best_wl_nm = wavelength_grid[top_wl_indices]
 
-    print(f"    Selection frequency across {freq_analysis['total_runs']} runs "
-          f"({len(seeds)} seeds × 5 folds):")
+    print(f"\n    Top-{k} individual wavelengths by frequency:")
     for idx, nm, count, pct in freq_analysis['top_wavelengths'][:k]:
-        band_info = interpret_wavelength(nm)
-        print(f"      {nm:>6.0f} nm  —  {pct:>5.0f}% ({count}/{freq_analysis['total_runs']})  —  {band_info}")
+        band = map_wavelength_to_band(nm) or '—'
+        print(f"      {nm:>6.0f} nm  {pct:>5.0f}%  [{band}]")
 
-    # Also report strict consensus for reference
+    # ── Stability summary ──
     best_consensus_all_seeds = all_consensus[best_method]
     avg_consensus = np.mean([ci['n_consensus'] for ci in best_consensus_all_seeds])
     avg_jaccard = np.mean([ci['stability_jaccard'] for ci in best_consensus_all_seeds])
-    print(f"    Strict consensus (avg across seeds): {avg_consensus:.1f}/{k}  |  "
-          f"Jaccard: {avg_jaccard:.2f}")
-    print(f"    Unique wavelengths ever selected: {freq_analysis['n_unique_selected']}")
+    print(f"\n    Band-level stability: {sum(1 for _, pct, _ in band_analysis['top_bands'] if pct >= 50)}/"
+          f"{len(CHEMICAL_BANDS)} bands ≥ 50% frequency")
+    print(f"    Point-level (strict consensus): {avg_consensus:.1f}/{k} avg  |  "
+          f"Jaccard: {avg_jaccard:.2f}  |  "
+          f"Unique λ selected: {freq_analysis['n_unique_selected']}")
 
-    n_final = len(top_wl_indices)
-    print(f"\n    Compression:  228 → {n_final} wavelengths ({(1 - n_final/228)*100:.0f}% reduction)")
+    n_bands_used = sum(1 for _, pct, _ in band_analysis['top_bands'] if pct >= 30)
+    print(f"\n    Effective bands needed: {n_bands_used}  |  "
+          f"Compression: 228 → {n_bands_used} bands ({(1 - n_bands_used/228)*100:.0f}% reduction)")
     print(f"    Accuracy gap:  {best_score - teacher_mean:+.4f} vs Teacher (228λ)")
 
     print(f"\n  ── Hardware Impact ──")
     print(f"    Lab spectrometer (228 px):       ~$2,000+")
-    print(f"    Portable {n_final}-λ LED array:  ~${n_final*30}–${n_final*50}")
-    print(f"    Cost reduction:                  ~{(1 - n_final*40/2000)*100:.0f}%")
+    print(f"    Portable {n_bands_used}-λ LED array:  ~${n_bands_used*30}–${n_bands_used*50}")
+    print(f"    Cost reduction:                  ~{(1 - n_bands_used*40/2000)*100:.0f}%")
     print(f"    Inference latency:               < 1 ms (suitable for real-time)")
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -920,6 +1009,7 @@ def run_multi_seed_experiment(
         'best_indices': top_wl_indices,
         'all_consensus': all_consensus,
         'freq_analysis': freq_analysis,  # cross-seed frequency analysis
+        'band_analysis': band_analysis,  # band-level frequency analysis
         'all_selected_sets_raw': all_selected_sets_raw,
         'X': X, 'y': y, 'wavelength_grid': wavelength_grid, 'le': le, 'meta_df': meta_df,
     }
@@ -962,7 +1052,24 @@ def save_results(
         stats_df.to_csv(f"{prefix}_statistics.csv", index=False, float_format="%.4f")
         print(f"  ✓ Saved: {prefix}_statistics.csv")
 
-    # ── 3. Best wavelengths with selection frequency ──
+    # ── 3. Band-level selection frequency (primary stability metric) ──
+    band_data = result.get('band_analysis', {})
+    band_records = []
+    if band_data:
+        for band_name, pct, marker_for in band_data.get('top_bands', []):
+            count, total = band_data['band_counts'].get(band_name, (0, '?'))
+            band_records.append({
+                'Band': band_name,
+                'Frequency_pct': f"{pct:.0f}",
+                'Selection_count': f"{count}/{total}",
+                'Marker_for': marker_for,
+            })
+    if band_records:
+        band_df = pd.DataFrame(band_records)
+        band_df.to_csv(f"{prefix}_band_frequency.csv", index=False)
+        print(f"  ✓ Saved: {prefix}_band_frequency.csv")
+
+    # ── 4. Top individual wavelengths with selection frequency ──
     from plotting import interpret_wavelength
     freq_data = result.get('freq_analysis', {})
     top_wl = freq_data.get('top_wavelengths', [])
@@ -975,6 +1082,7 @@ def save_results(
                 'Wavelength_nm': f"{nm:.1f}",
                 'Frequency_pct': f"{pct:.0f}",
                 'Selection_count': f"{count}/{freq_data.get('total_runs', '?')}",
+                'Chemical_band': map_wavelength_to_band(nm) or '—',
                 'Interpretation': interpret_wavelength(nm),
             })
     else:
@@ -988,15 +1096,22 @@ def save_results(
                 'Wavelength_nm': f"{nm:.1f}",
                 'Frequency_pct': '—',
                 'Selection_count': '—',
+                'Chemical_band': map_wavelength_to_band(nm) or '—',
                 'Interpretation': interpret_wavelength(nm),
             })
     wl_df = pd.DataFrame(wl_records)
     wl_df.to_csv(f"{prefix}_best_wavelengths.csv", index=False)
     print(f"  ✓ Saved: {prefix}_best_wavelengths.csv")
 
-    # ── 4. Full experiment config + key metrics (JSON) ──
+    # ── 5. Full experiment config + key metrics (JSON) ──
     wl_nm = result['best_wavelengths_nm']
     indices = result['best_indices']
+    band_summary = {}
+    if band_data:
+        band_summary = {
+            name: {'frequency_pct': round(pct, 1), 'marker_for': marker}
+            for name, pct, marker in band_data.get('top_bands', [])
+        }
     config = {
         'k': k,
         'n_seeds': n_seeds,
@@ -1011,6 +1126,7 @@ def save_results(
         'random_std': float(result['random_std']),
         'best_wavelengths_nm': [f"{float(w):.1f}" for w in wl_nm],
         'best_wavelengths_indices': [int(i) for i in indices],
+        'band_frequencies': band_summary,
         'class_names': [str(c) for c in result['le'].classes_] if result.get('le') else [],
         'avg_consensus': float(np.mean([ci['n_consensus']
                               for ci in result.get('all_consensus', {}).get(result['best_method'], [])]
