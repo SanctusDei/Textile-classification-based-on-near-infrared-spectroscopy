@@ -141,7 +141,7 @@
   | Teacher **retrained per fold** | Prevents Teacher from leaking test knowledge to Student |
   | Multi-seed (5 seeds) | Reports mean ± std, not single-seed cherry-picking |
   | Wilcoxon signed-rank tests (α=0.05) | Statistical significance of method comparisons |
-  | Band-level frequency analysis | Chemical absorption bands are the stable unit; single-point Jaccard underestimates true stability |
+  | Band-level frequency analysis | Chemical absorption bands are the stable unit for hardware deployment |
 
   ### Baselines
 
