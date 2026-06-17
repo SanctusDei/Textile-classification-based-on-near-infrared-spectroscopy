@@ -2,7 +2,7 @@
 
 > **From 228-pixel lab spectrometer to 2–4 LEDs — wavelength selection for portable NIR textile identification.**
 
-Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 bands, 188 samples, 6 classes). The project investigates feature selection methods to compress the full spectrum into a handful of key wavelengths, enabling deployment on low-cost portable hardware.
+Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 bands). The full dataset contains 188 pure-fiber spectra across 6 classes, plus 40 blend spectra and 10 background spectra. The wavelength selection experiment uses 173 spectra from 3 classes. The project investigates feature selection methods to compress the full spectrum into a handful of key wavelengths, enabling deployment on low-cost portable hardware.
 
 ---
 
@@ -34,28 +34,39 @@ python wavelength_selection/select_wavelengths.py --k 3 --n_seeds 5 --preprocess
 
 ## Dataset
 
-### Overview
+### Full Dataset
 
 | Property | Value |
 |----------|-------|
-| **Samples** | 173 pure-fiber spectra (after filtering single-switch classes) |
+| **Pure-fiber spectra** | 188 (6 classes) |
+| **Blend-fabric spectra** | 40 (4 blend ratios) |
+| **Background spectra** | 10 (PVC reference) |
+| **Fabric images** | 60 (`.jpg`, in `data/raw/image/`) |
 | **Spectral range** | 900–1700 nm |
-| **Spectral bands** | 228 pixels |
-| **Classes** | 3 (Cotton, Nylon, Polyester) |
-| **Unique swatches** | 35 physical fabric specimens |
+| **Spectral bands** | 228 pixels (3.5 nm/px) |
 | **Instrument** | TI DLP NIRScan nano (SN 6460024) |
-| **Additional data** | 40 blend spectra, 10 background spectra, 60 fabric images |
-
-### Classes
 
 | Class | Spectra | Swatches | Description |
 |-------|:--:|:--:|-------------|
-| Polyester (PET) | 83 | 24 (+1 Std) | Synthetic; most common textile fiber |
-| Nylon (PA) | 45 | 4 (+1 Std) | Synthetic polyamide |
-| Cotton | 45 | 4 (+1 Std) | Natural cellulose |
-| **Total** | **173** | **35** | |
+| Polyester (PET) | 83 | 25 | Synthetic; most common textile fiber |
+| Nylon (PA) | 45 | 5 | Synthetic polyamide |
+| Cotton | 45 | 5 | Natural cellulose |
+| Acetate | 5 | 1 | Semi-synthetic cellulose acetate |
+| Acrylic | 5 | 1 | Synthetic (PAN-based) |
+| Wool | 5 | 1 | Natural protein (keratin) |
+| **Total** | **188** | **38** | |
 
-> **Note**: Acetate, Acrylic, and Wool (5 spectra each, single "Std" swatch) are excluded — with only one physical specimen per class, specimen-level cross-validation is impossible.
+### Experiment Subset
+
+The wavelength selection experiment uses a filtered subset of the full dataset:
+
+| Property | Value |
+|----------|-------|
+| **Samples** | 173 pure-fiber spectra |
+| **Classes** | 3 (Cotton, Nylon, Polyester) |
+| **Unique swatches** | 35 physical fabric specimens |
+
+> **Note**: Acetate, Acrylic, and Wool are excluded from the experiment — with only 1 physical swatch each, specimen-level GroupKFold cross-validation is impossible (the same swatch cannot appear in both train and test).
 
 ### Data Collection Protocol
 
@@ -85,13 +96,15 @@ Each CSV file contains a **22-line metadata header** followed by 228 rows of spe
 | `Reference Signal (unitless)` | Background reference intensity |
 | `Sample Signal (unitless)` | Raw sample intensity |
 
-### Additional Data
+### Data Not Used in This Experiment
 
-- **40 blend-fabric spectra** across 4 blend ratios:
+The following data are included in the repository but not used by the wavelength selection pipeline:
+
+- **40 blend-fabric spectra** (`data/preprocessing/Blends/csv/`) — 4 blend ratios:
   - Cotton/Polyester 55:45, Cotton/Polyester 80:20
   - Nylon/Polyester 30:70, Wool/Polyester 35:65
-- **10 PVC background spectra** — reference measurements for normalization
-- **60 fabric images** (`.jpg`) — visual documentation of measured swatches (across `data/raw/image/`, `data/preprocessing/total/`, and `data/preprocessing/Blends/images/`)
+- **10 PVC background spectra** (`data/preprocessing/Pure/07_Background/csv/`) — reference measurements for normalization
+- **60 fabric images** (`data/raw/image/`) — visual documentation of measured swatches
 
 ---
 
