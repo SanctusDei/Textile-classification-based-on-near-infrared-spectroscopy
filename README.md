@@ -177,7 +177,6 @@
 
   L1 LogisticRegression dominates at both k=5 and k=10, achieving identical pseudo-label accuracy (0.9836) while exceeding the teacher by +0.0179. Mutual Information ranks second (0.9747 at k=10, 0.9457 at k=5). RFE suffers from severe selection instability (Jaccard = 0.00) despite reasonable accuracy. ANOVA F-score and Random Forest consistently underperform — ANOVA only sees the O–H band, and RF importance is unreliable with correlated spectral features. At k=3, RFE (0.9648) edges out L1 LogReg (0.9610). **k=5 is the sweet spot**: 0.9836 accuracy with 5 LEDs, matching k=10's performance exactly at half the hardware cost. The student exceeding the teacher across all k budgets suggests the full-spectrum teacher overfits, and L1-driven feature selection acts as a powerful regularizer.
 
-  > **Note on stability metrics**: Strict consensus (intersection across all folds) underestimates true stability because adjacent wavelengths within the same chemical absorption band are interchangeable. Selection frequency (%) — how often each wavelength appears across all seeds × folds — is the more informative metric. For example, at k=5, L1 LogReg has only 1.0 strict-consensus wavelengths on average but top-5 wavelengths appear at 48–100% frequency, each from a distinct chemical band.
 
   ### Preprocessing Impact
 
