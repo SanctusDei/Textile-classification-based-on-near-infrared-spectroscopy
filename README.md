@@ -280,21 +280,22 @@ result['best_indices']         # np.ndarray — array indices of selected wavele
 
 ---
 
-## Dependencies
+## Future Work & Limitations
 
-| Package | Version (tested) | Purpose |
-|---------|:--:|---------|
-| Python | ≥ 3.8 | — |
-| numpy | ≥ 1.20 | Array operations |
-| pandas | ≥ 1.3 | Data loading, result aggregation |
-| scipy | ≥ 1.7 | Savitzky-Golay filter, Wilcoxon test, hierarchical clustering |
-| scikit-learn | ≥ 1.0 | ML models, feature selection, CV |
-| matplotlib | ≥ 3.4 | Figure generation |
-| seaborn | ≥ 0.11 | Statistical visualizations |
+### Limitations
 
-```bash
-pip install numpy pandas scipy scikit-learn matplotlib seaborn
-```
+- **Class coverage**: Only 3 of 6 pure-fiber classes (Cotton, Nylon, Polyester) were used due to the single-switch constraint. Acetate, Acrylic, and Wool lack sufficient physical specimens for swatch-level cross-validation.
+- **Blend fabrics**: 40 blend-fiber spectra are present in the dataset but not yet included in the wavelength selection experiment. Blends (e.g., Cotton/Polyester 55:45) present a harder multi-label or out-of-distribution challenge.
+- **Dataset scale**: 173 spectra from 35 swatches is modest; larger-scale collection across more fabric types and conditions would improve generalizability.
+- **Hardware validation**: Selected wavelengths are validated statistically via cross-validation but have not yet been tested on physical LED + photodiode hardware.
+
+### Future Work
+
+- **Hardware prototyping**: Build and test a portable device with the selected k LEDs to validate real-world classification accuracy.
+- **Blend classification**: Extend the pipeline to handle blend fabrics, potentially via multi-label soft classification or regression-based composition prediction.
+- **Transfer learning**: Investigate whether wavelengths selected on pure fabrics generalize to blends.
+- **Additional classes**: Collect more swatches for Acetate, Acrylic, and Wool to enable full 6-class discrimination.
+- **Larger sample sizes**: Increase seed count (≥20) for robust statistical testing and narrower confidence intervals.
 
 ---
 
