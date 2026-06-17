@@ -49,7 +49,7 @@ import pandas as pd
 from scipy.signal import savgol_filter
 from scipy.stats import wilcoxon
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import GroupKFold, cross_val_score
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -125,17 +125,21 @@ def load_all_spectra(
     preprocess: str = "none",
     sg_window: int = 11,
     sg_polyorder: int = 3,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, LabelEncoder, pd.DataFrame]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, LabelEncoder, pd.DataFrame, np.ndarray]:
     """Load all spectra using pandas.
 
-    Also returns a metadata DataFrame with filename, material, sample_id, etc.
+    Extracts swatch-level identifiers for specimen-aware cross-validation.
+    Each unique swatch (physical fabric piece) forms a group; all spectra
+    from the same swatch stay together during train/test splits to prevent
+    data leakage.
 
     Returns:
         X:         (n_samples, 228) absorbance spectra
         y:         (n_samples,) integer class labels
         wl_grid:   (228,) wavelength in nm
         le:        fitted LabelEncoder
-        meta_df:   DataFrame with columns [filename, material, class_id]
+        meta_df:   DataFrame with columns [filename, material, swatch_id, class_id]
+        groups:    (n_samples,) integer group labels for GroupKFold
     """
     files = sorted(glob.glob(os.path.join(data_dir, "*.csv")))
     wavelength_grid = load_wavelength_grid(data_dir)
@@ -144,12 +148,9 @@ def load_all_spectra(
     meta_records = []
 
     for fpath in files:
-        # get file name
         fname = os.path.basename(fpath)
-        # get label
         material = fname.split('_')[0]
 
-        # Read spectral data with pandas (skip 22-line instrument header)
         df = pd.read_csv(fpath, skiprows=22, header=None)
         absorbance = df.iloc[:, 1].dropna().to_numpy(dtype=np.float64)
 
@@ -157,23 +158,32 @@ def load_all_spectra(
             X_list.append(absorbance)
             y_list.append(material)
 
-            # Parse filename for metadata
+            # Parse filename: Material_Variant_Condition.csv
+            # e.g. Cotton_C01_Pos1_01 → swatch_id = "Cotton_C01"
+            #      Acetate_Std_Single_01 → swatch_id = "Acetate_Std"
             parts = fname.replace('.csv', '').split('_')
+            variant = parts[1] if len(parts) > 1 else ''
+            swatch_id = f"{material}_{variant}"  # specimen-level identifier
+
             meta_records.append({
                 'filename': fname,
                 'material': material,
-                'variant': parts[1] if len(parts) > 1 else '',
+                'swatch_id': swatch_id,
+                'variant': variant,
                 'condition': '_'.join(parts[2:]) if len(parts) > 2 else '',
             })
-    # shape (sample, 228)
+
     X = np.array(X_list, dtype=np.float64)
-    # label -> number "Cotton" -> 1
-    # shape (sample , label)
     le = LabelEncoder()
     y = le.fit_transform(y_list)
 
     meta_df = pd.DataFrame(meta_records)
     meta_df['class_id'] = y
+
+    # Build group labels: each unique swatch gets a unique integer
+    swatch_names = meta_df['swatch_id'].values
+    swatch_le = LabelEncoder()
+    groups = swatch_le.fit_transform(swatch_names)
 
     # ── Preprocessing ──
 
@@ -188,11 +198,13 @@ def load_all_spectra(
         print(f"  Preprocessing: {label} (window={sg_window}, polyorder={sg_polyorder})")
         X = apply_savgol(X, window_length=sg_window, polyorder=sg_polyorder, derivative=deriv)
 
+    n_swatches = len(swatch_le.classes_)
     print(f"  Loaded: {X.shape[0]} spectra × {X.shape[1]} wavelengths")
+    print(f"  Swatches: {n_swatches} unique specimens")
     print(f"  Classes ({len(le.classes_)}): {list(le.classes_)}")
     print(f"  Class distribution:\n{meta_df['material'].value_counts().to_string()}")
 
-    return X, y, wavelength_grid, le, meta_df
+    return X, y, wavelength_grid, le, meta_df, groups
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -453,11 +465,11 @@ def train_student_on_fold(
 
 
 def compute_teacher_baseline(
-    X: np.ndarray, y: np.ndarray, skf: StratifiedKFold, seed: int = 42,
+    X: np.ndarray, y: np.ndarray, skf: GroupKFold, groups: np.ndarray, seed: int = 42,
 ) -> float:
-    """Per-fold teacher baseline — NO leakage."""
+    """Per-fold teacher baseline — swatch-aware, NO leakage."""
     fold_accs = []
-    for tr_idx, te_idx in skf.split(X, y):
+    for tr_idx, te_idx in skf.split(X, y, groups=groups):
         X_tr, X_te = X[tr_idx], X[te_idx]
         y_tr, y_te = y[tr_idx], y[te_idx]
         model, scaler, _ = train_teacher_on_fold(X_tr, y_tr, seed)
@@ -558,12 +570,16 @@ def run_single_seed_experiment(
     X: np.ndarray,
     y: np.ndarray,
     wavelength_grid: np.ndarray,
-    skf: StratifiedKFold,
+    skf: GroupKFold,
+    groups: np.ndarray,
     k: int,
     seed: int,
     selection_methods: Dict,
 ) -> Tuple[Dict, float, float]:
     """One full experiment with a given random seed.
+
+    Swatch-aware CV: all spectra from a physical swatch stay in the
+    same fold (train or test). Prevents same-fabric data leakage.
 
     Per-fold:
       1. Train teacher on X_tr only
@@ -576,7 +592,7 @@ def run_single_seed_experiment(
     teacher_fold_accs = []
     teacher_results_per_fold = []
 
-    for tr_idx, te_idx in skf.split(X, y):
+    for tr_idx, te_idx in skf.split(X, y, groups=groups):
         X_tr, X_te = X[tr_idx], X[te_idx]
         y_tr, y_te = y[tr_idx], y[te_idx]
         # get teacher model
@@ -591,7 +607,7 @@ def run_single_seed_experiment(
     # ── Random k baseline ──
     random_fold_accs = []
     rng = np.random.RandomState(seed)
-    for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y)):
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y, groups=groups)):
         X_tr, X_te = X[tr_idx], X[te_idx]
         y_tr, y_te = y[tr_idx], y[te_idx]
         rand_idx = rng.choice(X.shape[1], k, replace=False)
@@ -613,7 +629,7 @@ def run_single_seed_experiment(
         fold_accs_pseudo = []
         selected_sets = []
 
-        for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y)):
+        for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y, groups=groups)):
             X_tr, X_te = X[tr_idx], X[te_idx]
             y_tr, y_te = y[tr_idx], y[te_idx]
 
@@ -676,29 +692,63 @@ def run_multi_seed_experiment(
     wavelength_grid: np.ndarray = None,
     le: LabelEncoder = None,
     meta_df: pd.DataFrame = None,
+    groups: np.ndarray = None,
     plot: bool = False,
     save_plots_dir: str = "figures",
     methods: List[str] = None,
 ) -> Dict:
     """Run experiment across multiple random seeds, aggregate results.
 
+    Uses swatch-level GroupKFold to prevent data leakage: all spectra
+    from the same physical fabric swatch stay together in train or test.
+    Classes with only 1 swatch (Acetate, Acrylic, Wool) are excluded.
+
     Args:
         plot: if True, generate and save all figures
         save_plots_dir: directory for saved figures
         methods: optional list of method names to include (None = all 5)
+        groups: specimen-level group labels (auto-loaded if None)
     """
     if seeds is None:
         seeds = [42]
+
+    # Load data if not provided
+    if X is None:
+        X, y, wavelength_grid, le, meta_df, groups = load_all_spectra(preprocess=preprocess)
+
+    # ── Exclude classes with only 1 swatch ──
+    # Acetate, Acrylic, Wool have single "Std" swatches → impossible
+    # to do specimen-level CV. Keep only Cotton, Nylon, Polyester.
+    n_swatches_per_class = {}
+    for cls_id in np.unique(y):
+        cls_swatches = np.unique(groups[y == cls_id])
+        n_swatches_per_class[le.classes_[cls_id]] = len(cls_swatches)
+
+    keep_mask = np.ones(len(y), dtype=bool)
+    for cls_id, cls_name in enumerate(le.classes_):
+        if n_swatches_per_class[cls_name] < 2:
+            keep_mask[y == cls_id] = False
+            print(f"  ⚠ Excluding '{cls_name}': only {n_swatches_per_class[cls_name]} swatch(es) "
+                  f"— cannot do specimen-level CV")
+
+    X = X[keep_mask]
+    y = y[keep_mask]
+    groups = groups[keep_mask]
+    meta_df = meta_df.iloc[keep_mask].reset_index(drop=True)
+
+    # Re-encode labels (some classes removed)
+    le = LabelEncoder()
+    y = le.fit_transform(y)
+
+    print(f"  Retained: {X.shape[0]} spectra, {len(np.unique(groups))} swatches, "
+          f"{len(le.classes_)} classes ({list(le.classes_)})")
 
     print("=" * 70)
     print(f"MULTI-SEED WAVELENGTH SELECTION EXPERIMENT")
     print(f"  k = {k} wavelengths  |  {len(seeds)} seeds: {seeds}")
     print(f"  Preprocessing: {preprocess}")
+    print(f"  CV: GroupKFold (swatch-level, no data leakage)")
     print("=" * 70)
-
-    # Load data if not provided
-    if X is None:
-        X, y, wavelength_grid, le, meta_df = load_all_spectra(preprocess=preprocess)
 
     # Selection methods registry (5 classic methods)
     all_methods = {
@@ -730,10 +780,10 @@ def run_multi_seed_experiment(
         print(f"\n{'─' * 50}")
         print(f"SEED = {seed}")
         print(f"{'─' * 50}")
-        # create 5 stratified k-Fold
-        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+        # Swatch-level CV: keep same fabric together
+        skf = GroupKFold(n_splits=5, shuffle=True, random_state=seed)
         results, teacher_bl, random_bl = run_single_seed_experiment(
-            X, y, wavelength_grid, skf, k, seed, selection_methods
+            X, y, wavelength_grid, skf, groups, k, seed, selection_methods
         )
 
         all_teacher_baselines.append(teacher_bl)
@@ -947,9 +997,9 @@ def save_results(
         'teacher_std': float(result['teacher_std']),
         'random_mean': float(result['random_mean']),
         'random_std': float(result['random_std']),
-        'best_wavelengths_nm': [f"{w:.1f}" for w in wl_nm],
+        'best_wavelengths_nm': [f"{float(w):.1f}" for w in wl_nm],
         'best_wavelengths_indices': [int(i) for i in indices],
-        'class_names': result.get('le', None) and list(result['le'].classes_) or [],
+        'class_names': [str(c) for c in result['le'].classes_] if result.get('le') else [],
     }
     with open(f"{prefix}_experiment.json", 'w') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
@@ -1001,12 +1051,13 @@ if __name__ == "__main__":
 
     # Pre-load data to pass into multiple runs
     print("Loading data...")
-    X, y, wavelength_grid, le, meta_df = load_all_spectra(preprocess=args.preprocess)
+    X, y, wavelength_grid, le, meta_df, groups = load_all_spectra(preprocess=args.preprocess)
 
     # ── Primary experiment ──
     result_k = run_multi_seed_experiment(
         k=args.k, seeds=seeds, preprocess=args.preprocess,
         X=X, y=y, wavelength_grid=wavelength_grid, le=le, meta_df=meta_df,
+        groups=groups,
         plot=args.plot, save_plots_dir=args.save_plots,
         methods=method_list,
     )
@@ -1028,6 +1079,7 @@ if __name__ == "__main__":
         result_compare = run_multi_seed_experiment(
             k=compare_k, seeds=seeds[:min(len(seeds), 3)], preprocess=args.preprocess,
             X=X, y=y, wavelength_grid=wavelength_grid, le=le, meta_df=meta_df,
+            groups=groups,
             plot=args.plot, save_plots_dir=args.save_plots,
             methods=method_list,
         )
