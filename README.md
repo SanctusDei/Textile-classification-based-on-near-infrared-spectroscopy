@@ -2,7 +2,7 @@
 
   > **From 228-point lab spectrometer to 2–4 LEDs — wavelength selection for portable NIR textile identification.**
 
-  Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 sampling points). The full dataset contains 188 pure-fiber spectra across 6 classes, plus 40 blend spectra and 10 background spectra. The wavelength selection experiment uses 173 spectra from 3 classes. The project investigates feature selection methods to compress the full spectrum into a handful of key wavelengths, enabling deployment on low-cost portable hardware.
+  Near-infrared (NIR) spectroscopy dataset for textile fiber classification, acquired with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 sampling points). The full dataset comprises 188 pure-fiber spectra across 6 classes, 40 blend-fabric spectra, and 10 background reference spectra. The wavelength selection experiment uses 173 pure-fiber spectra from 3 classes. The project investigates feature selection methods to compress the full 228-point spectrum into a small set of key wavelengths, enabling deployment on low-cost portable hardware.
 
   ---
 
