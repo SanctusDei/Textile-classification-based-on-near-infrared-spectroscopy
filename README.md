@@ -114,25 +114,6 @@ The following data are included in the repository but not used by the wavelength
 
 A lab-grade NIR spectrometer (228-point InGaAs array) costs **$2,000+**. By identifying k = 3–10 discriminative wavelengths, we can replace it with **fixed-wavelength LEDs + photodiodes** (~$30–50 per LED), reducing the bill of materials by **94–98%** while maintaining near-perfect classification accuracy.
 
-### The Adjacent-Point Problem
-
-On raw absorbance spectra, univariate feature selection methods (ANOVA F-score, Mutual Information) suffer from a critical flaw: NIR absorption peaks span 20–50 nm (6–14 sampling points at 3.5 nm/point resolution), creating strong collinearity between adjacent wavelengths. These methods rank all points within the same absorption band as "top-k," **collapsing k selections into a single chemical information channel**.
-
-Concretely, without countermeasures, ANOVA on raw spectra tends to select multiple wavelengths from the same C–H overtone band (e.g., 1190–1210 nm), yielding an effective spectral spread of only a few nanometers — compared to ~170 nm for random selection. This redundancy degrades classification accuracy because the model sees only one chemical dimension instead of k complementary ones.
-
-### Mitigating Adjacent-Point Collinearity
-
-**Savitzky-Golay 1st-derivative preprocessing** (window=11, polyorder=3) is the primary mitigation in the current pipeline: it removes baseline drift and decorrelates adjacent sampling points, largely resolving the redundancy problem before feature selection begins.
-
-For stronger guarantees, two additional strategies are implemented in the code as optional extensions (not active in the default 5-method suite):
-
-| Strategy | Mechanism |
-|----------|-----------|
-| **Minimum Distance (MinDist, 30 nm)** | Greedy selection: after picking the top-scoring wavelength, exclude all wavelengths within ±30 nm; repeat |
-| **Correlation Clustering** | Pre-compute k spectral clusters via hierarchical clustering on 1−\|Pearson r\|; pick the best-scoring wavelength per cluster |
-
-The diversity-aware methods (`select_anova_mindist`, `select_mi_mindist`, `_select_anova_per_cluster`, `_select_mi_per_cluster`) are defined in `select_wavelengths.py` and can be registered into the selection method suite for experiments that require explicit spectral diversity constraints.
-
 ### Methods Compared (5 total)
 
 | Method | Type | Description |
