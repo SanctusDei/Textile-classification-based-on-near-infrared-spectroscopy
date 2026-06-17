@@ -73,7 +73,7 @@ The wavelength selection experiment uses a filtered subset of the full dataset:
 Each swatch was measured under **multiple conditions** to capture intra-class variability:
 
 - **Multiple positions** across the fabric surface
-- **Multiple rotation angles** (0°, 90°, 180°, 270°)
+- **Multiple rotation angles** (0°, 90°)
 - **Multiple fold configurations** (single-layer, double-layer)
 
 ### Acquisition Parameters
