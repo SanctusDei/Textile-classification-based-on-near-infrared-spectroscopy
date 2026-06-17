@@ -183,7 +183,7 @@
 
   | Preprocessing | Effect on Feature Selection |
   |---------------|----------------------------|
-  | `none` (raw) | Adjacent-point collinearity degrades univariate rankings |
+  | `none` (raw) | Redundant adjacent wavelengths degrade univariate feature rankings |
   | `savgol` | Smoothing reduces noise, preserves peak shapes |
   | `savgol_1deriv` | **Recommended** — removes baseline drift, sharpens peaks |
   | `savgol_2deriv` | Further sharpens but amplifies noise |
