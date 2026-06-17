@@ -143,8 +143,6 @@ The accuracy gap between Teacher (228λ) and Student (kλ) quantifies the cost o
 | Wilcoxon signed-rank tests (α=0.05) | Statistical significance of method comparisons |
 | Consensus wavelength analysis | Jaccard stability index; only stable wavelengths recommended for hardware |
 
-> **Why swatch-level CV matters**: Without it, spectra from the same fabric piece appear in both train and test (e.g., Cotton_C01_Pos1 in train, Cotton_C01_Pos2 in test). The model learns to recognize the specific cloth rather than the material class, inflating Random baseline accuracy and undermining the validity of wavelength selection.
-
 ### Baselines
 
 | Baseline | Meaning |
