@@ -12,7 +12,6 @@ Near-infrared (NIR) spectroscopy dataset for textile fiber classification, colle
 - [Dataset](#dataset)
 - [Experiment: Wavelength Selection](#experiment-wavelength-selection)
 - [Key Results](#key-results)
-- [Project Structure](#project-structure)
 - [Usage](#usage)
 - [Citation](#citation)
 - [License](#license)
@@ -209,8 +208,6 @@ Three chemically distinct channels (C–H, O–H, N–H) together discriminate C
 | **1506** | N–H 1st overtone | Nylon (amide) |
 | **1510** | N–H 1st overtone | Nylon (amide) |
 
-> ⚠ Only 2 consensus wavelengths (3rd did not reach majority across 5 seeds × 5 folds). Both are adjacent N–H band sampling points — even with SG 1st-derivative, k=3 struggles with the adjacent-point problem. Accuracy drops to 0.915 (gap: −0.029 vs Teacher), and the single chemical channel cannot cleanly separate all 3 classes.
-
 ### Statistical Significance
 
 Wilcoxon signed-rank tests (n=5 seeds, α=0.05) compare each method against the Random baseline and the Teacher.
@@ -220,46 +217,7 @@ Wilcoxon signed-rank tests (n=5 seeds, α=0.05) compare each method against the 
 | **k=5** | All comparisons: p=0.0625 (not significant) |
 | **k=3** | All comparisons: p ≥ 0.0625 (not significant) |
 
-> **Note**: With n=5, the Wilcoxon signed-rank test has a minimum possible p-value of 0.0625 (when all 5 seed-pairs rank in the same direction). Achieving statistical significance at α=0.05 requires ≥6 seeds. The consistent ranking order across seeds is informative, but formal significance would require a larger seed sample.
-
-### Figures
-
-Running `--plot` generates 5 types of publication-quality figures (300 DPI PNG):
-
-| Figure | Filename Pattern | Content |
-|--------|-----------------|---------|
-| 1 | `fig1_mean_spectra_k{N}.png` | Per-class mean spectra ± 1σ, selected wavelengths highlighted |
-| 2 | `fig2_method_comparison_k{N}.png` | Bar chart: 5 methods vs Teacher & Random baselines |
-| 3 | `consensus_heatmap_{Method}_{N}wl.png` | Seed × Wavelength heatmap per method (fold-count frequency) |
-| 4 | `fig4_physical_interpretation_k{N}.png` | Grand-mean spectrum with chemical bond annotations |
-| 5 | `fig5_confusion_matrix_{Method}_k{N}.png` | Raw counts + row-normalized recall for best method |
-
 ---
-
-## Project Structure
-
-```
-Textile-classification/
-├── README.md
-├── .gitignore
-├── resume_description.md             # Resume-ready project bullets (CN/EN)
-│
-├── data/
-│   ├── csv/                          # 188 pure-fiber spectra (228-point CSV)
-│   ├── preprocessing/
-│   │   ├── Pure/                     # Spectra reorganized by class (7 subdirs: 3 kept + Acetate/Acrylic/Wool/Background)
-│   │   ├── Blends/                   # 40 blend spectra (4 blend ratios) + 5 fabric images
-│   │   └── total/                    # 35 additional fabric images
-│   └── raw/image/                    # 60 raw fabric images
-│
-├── figures/                          # Output directory for generated plots (300 DPI PNG)
-│
-├── results/                          # Experiment outputs (CSV summary + statistics + JSON config)
-│
-└── wavelength_selection/
-    ├── select_wavelengths.py         # Main experiment runner (CLI + Python API)
-    └── plotting.py                   # Visualization module (5 figure types)
-```
 
 ---
 
