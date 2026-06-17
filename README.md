@@ -121,19 +121,15 @@ Two strategies enforce that selected wavelengths span distinct spectral regions:
 
 Combined with **Savitzky-Golay 1st-derivative preprocessing** (window=11, polyorder=3) — which removes baseline drift and decorrelates adjacent pixels — these constraints eliminate the redundancy problem entirely.
 
-### Methods Compared (9 total)
+### Methods Compared (5 total)
 
 | Method | Type | Diversity-Aware |
 |--------|------|:---:|
 | ANOVA F-score | Univariate filter | — |
 | Mutual Information | Univariate filter | — |
-| RFE (Linear SVM) | Wrapper | — |
-| L1 LogisticRegression | Embedded | — |
-| Random Forest Imp. | Embedded | — |
-| ANOVA + MinDist | Univariate + constraint | ✅ |
-| MI + MinDist | Univariate + constraint | ✅ |
-| ANOVA + Clustering | Univariate + constraint | ✅ |
-| MI + Clustering | Univariate + constraint | ✅ |
+| ANOVA + MinDist | Univariate + 30 nm minimum distance | ✅ |
+| MI + MinDist | Univariate + 30 nm minimum distance | ✅ |
+| ANOVA + Clustering | Univariate + spectral clustering | ✅ |
 
 ### Teacher-Guided Pseudo-Label Training
 

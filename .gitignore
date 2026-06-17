@@ -5,6 +5,9 @@
 # Generated figures
 figures/
 
+# Experiment results
+results/
+
 # Python artifacts
 __pycache__/
 *.py[cod]

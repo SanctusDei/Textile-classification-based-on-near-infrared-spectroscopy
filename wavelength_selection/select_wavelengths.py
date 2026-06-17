@@ -6,13 +6,12 @@ Pure ML approach — no deep learning required.
 Problem: 228 NIR wavelengths → select k=5 or k=10 most informative ones
          → deploy on low-cost portable hardware.
 
-Methods compared:
+Methods compared (5 total):
   1. ANOVA F-score          — univariate filter, fast
   2. Mutual Information     — captures non-linear dependencies
-  3. RFE (Linear SVM)       — recursive feature elimination, wrapper
-  4. L1 LogisticRegression  — embedded sparsity, L1 penalty
-  5. Random Forest importance — tree-based embedded
-  6. Sequential Forward     — greedy wrapper (comment out if slow)
+  3. RFE (Linear SVM)       — wrapper, considers feature interactions
+  4. L1 LogisticRegression  — embedded sparsity via L1 penalty
+  5. Random Forest Imp.     — tree-based embedded importance
 
 Training modes:
   - Hard labels: student trains on ground-truth labels
@@ -31,10 +30,12 @@ Usage:
   python select_wavelengths.py --k 5 --n_seeds 5
   python select_wavelengths.py --k 10 --plot --save_plots figures/
   python select_wavelengths.py --preprocess savgol_1deriv
+  python select_wavelengths.py --methods "ANOVA F-score,Mutual Information"
 """
 
 import csv
 import glob
+import json
 import os
 import sys
 import argparse
@@ -677,12 +678,14 @@ def run_multi_seed_experiment(
     meta_df: pd.DataFrame = None,
     plot: bool = False,
     save_plots_dir: str = "figures",
+    methods: List[str] = None,
 ) -> Dict:
     """Run experiment across multiple random seeds, aggregate results.
 
     Args:
         plot: if True, generate and save all figures
         save_plots_dir: directory for saved figures
+        methods: optional list of method names to include (None = all 5)
     """
     if seeds is None:
         seeds = [42]
@@ -697,24 +700,24 @@ def run_multi_seed_experiment(
     if X is None:
         X, y, wavelength_grid, le, meta_df = load_all_spectra(preprocess=preprocess)
 
-    # Pre-compute spectral clusters ONCE (physical property, not sample-dependent)
-    cluster_labels = _compute_cluster_labels(X, k)
-
-    # Selection methods registry
-    selection_methods = {
-        # ── Original methods ──
-        'ANOVA F-score':          lambda Xtr, ytr: select_anova(Xtr, ytr, k),
-        'Mutual Information':     lambda Xtr, ytr: select_mutual_info(Xtr, ytr, k, seeds[0]),
-        'RFE (Linear SVM)':       lambda Xtr, ytr: select_rfe_svm(Xtr, ytr, k),
-        'L1 LogisticRegression':  lambda Xtr, ytr: select_l1_logreg(Xtr, ytr, k),
-        'Random Forest Imp.':     lambda Xtr, ytr: select_rf_importance(Xtr, ytr, k, seeds[0]),
-        # ── Diversity-aware: minimum distance ──
-        'ANOVA + MinDist':        lambda Xtr, ytr: select_anova_mindist(Xtr, ytr, k, wavelength_grid),
-        'MI + MinDist':           lambda Xtr, ytr: select_mi_mindist(Xtr, ytr, k, wavelength_grid, seed=seeds[0]),
-        # ── Diversity-aware: clustering (labels pre-computed once) ──
-        'ANOVA + Clustering':     lambda Xtr, ytr: _select_anova_per_cluster(Xtr, ytr, cluster_labels, k),
-        'MI + Clustering':        lambda Xtr, ytr: _select_mi_per_cluster(Xtr, ytr, cluster_labels, k, seeds[0]),
+    # Selection methods registry (5 classic methods)
+    all_methods = {
+        'ANOVA F-score':             lambda Xtr, ytr: select_anova(Xtr, ytr, k),
+        'Mutual Information':        lambda Xtr, ytr: select_mutual_info(Xtr, ytr, k, seeds[0]),
+        'RFE (Linear SVM)':          lambda Xtr, ytr: select_rfe_svm(Xtr, ytr, k),
+        'L1 LogisticRegression':     lambda Xtr, ytr: select_l1_logreg(Xtr, ytr, k),
+        'Random Forest Imp.':        lambda Xtr, ytr: select_rf_importance(Xtr, ytr, k, seeds[0]),
     }
+
+    # Filter methods if specified
+    if methods is not None:
+        selection_methods = {name: fn for name, fn in all_methods.items() if name in methods}
+        missing = set(methods) - set(all_methods.keys())
+        if missing:
+            print(f"  ⚠ Unknown method(s): {missing} — skipping")
+        print(f"  Methods: {list(selection_methods.keys())}")
+    else:
+        selection_methods = all_methods
 
     all_seed_results = {}
     all_teacher_baselines = []
@@ -862,6 +865,7 @@ def run_multi_seed_experiment(
     return {
         'k': k,
         'n_seeds': len(seeds),
+        'n_wavelengths_total': len(wavelength_grid),
         'teacher_mean': teacher_mean,
         'teacher_std': teacher_std,
         'random_mean': random_mean,
@@ -877,6 +881,79 @@ def run_multi_seed_experiment(
     }
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Results Persistence
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def save_results(
+    result: Dict,
+    results_dir: str = "results",
+    preprocess: str = "none",
+) -> None:
+    """Persist experiment results to CSV and JSON files.
+
+    Writes:
+      - {results_dir}/summary_k{N}_{preprocess}.csv      — method comparison
+      - {results_dir}/statistics_k{N}_{preprocess}.csv    — Wilcoxon tests
+      - {results_dir}/best_wavelengths_k{N}_{preprocess}.csv — selected λ + interpretation
+      - {results_dir}/experiment_k{N}_{preprocess}.json   — full config + key metrics
+    """
+    os.makedirs(results_dir, exist_ok=True)
+
+    k = result['k']
+    n_seeds = result['n_seeds']
+    tag = f"k{k}_{preprocess}" if preprocess != "none" else f"k{k}"
+    prefix = os.path.join(results_dir, tag)
+
+    # ── 1. Method comparison summary ──
+    summary_df = result['summary_df'].copy()
+    summary_df.to_csv(f"{prefix}_summary.csv", index=False, float_format="%.4f")
+    print(f"  ✓ Saved: {prefix}_summary.csv")
+
+    # ── 2. Statistical tests ──
+    stats_df = result['stats_df']
+    if not stats_df.empty:
+        stats_df.to_csv(f"{prefix}_statistics.csv", index=False, float_format="%.4f")
+        print(f"  ✓ Saved: {prefix}_statistics.csv")
+
+    # ── 3. Best wavelengths with physical interpretation ──
+    from plotting import interpret_wavelength
+    wl_nm = result['best_wavelengths_nm']
+    indices = result['best_indices']
+    wl_records = []
+    for rank, (idx, nm) in enumerate(zip(indices, wl_nm), start=1):
+        wl_records.append({
+            'Rank': rank,
+            'Index': idx,
+            'Wavelength_nm': f"{nm:.1f}",
+            'Interpretation': interpret_wavelength(nm),
+        })
+    wl_df = pd.DataFrame(wl_records)
+    wl_df.to_csv(f"{prefix}_best_wavelengths.csv", index=False)
+    print(f"  ✓ Saved: {prefix}_best_wavelengths.csv")
+
+    # ── 4. Full experiment config + key metrics (JSON) ──
+    config = {
+        'k': k,
+        'n_seeds': n_seeds,
+        'preprocess': preprocess,
+        'n_wavelengths_total': result.get('n_wavelengths_total',
+                                         len(result.get('wavelength_grid', []))),
+        'best_method': result['best_method'],
+        'best_score_pseudo': float(result['best_score']),
+        'teacher_mean': float(result['teacher_mean']),
+        'teacher_std': float(result['teacher_std']),
+        'random_mean': float(result['random_mean']),
+        'random_std': float(result['random_std']),
+        'best_wavelengths_nm': [f"{w:.1f}" for w in wl_nm],
+        'best_wavelengths_indices': [int(i) for i in indices],
+        'class_names': result.get('le', None) and list(result['le'].classes_) or [],
+    }
+    with open(f"{prefix}_experiment.json", 'w') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    print(f"  ✓ Saved: {prefix}_experiment.json")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -896,30 +973,70 @@ if __name__ == "__main__":
                         help="Preprocessing: savgol / savgol_1deriv / savgol_2deriv")
     parser.add_argument("--seed", type=int, default=None,
                         help="Single seed override (disables multi-seed mode)")
+    parser.add_argument("--methods", type=str, default=None,
+                        help="Comma-separated method names (default: all 5). "
+                             "Choices: ANOVA F-score, Mutual Information, "
+                             "RFE (Linear SVM), L1 LogisticRegression, "
+                             "Random Forest Imp.")
     parser.add_argument("--plot", action="store_true",
                         help="Generate and save figures")
     parser.add_argument("--save_plots", type=str, default="figures",
                         help="Directory to save figures (default: figures/)")
+    parser.add_argument("--save_results", action="store_true", default=True,
+                        help="Save experiment results to CSV/JSON (default: True)")
+    parser.add_argument("--no_save_results", action="store_false", dest="save_results",
+                        help="Do not save experiment results")
+    parser.add_argument("--results_dir", type=str, default="results",
+                        help="Directory to save results (default: results/)")
+    parser.add_argument("--compare_k", type=int, default=None,
+                        help="Also run a comparison experiment with this k value")
     args = parser.parse_args()
 
     seeds = [args.seed] if args.seed is not None else list(range(args.n_seeds))
 
-    # Pre-load data to pass into both k=5 and k=10 runs
+    # Parse methods filter
+    method_list = None
+    if args.methods:
+        method_list = [m.strip() for m in args.methods.split(",")]
+
+    # Pre-load data to pass into multiple runs
     print("Loading data...")
     X, y, wavelength_grid, le, meta_df = load_all_spectra(preprocess=args.preprocess)
 
-    # Run primary experiment
+    # ── Primary experiment ──
     result_k = run_multi_seed_experiment(
         k=args.k, seeds=seeds, preprocess=args.preprocess,
         X=X, y=y, wavelength_grid=wavelength_grid, le=le, meta_df=meta_df,
         plot=args.plot, save_plots_dir=args.save_plots,
+        methods=method_list,
     )
 
-    # If k=5, also run k=10 for comparison
-    if args.k == 5 and args.n_seeds >= 3:
+    # Save primary results
+    if args.save_results:
+        print(f"\n{'─' * 50}")
+        print(f"Saving results to {args.results_dir}/")
+        print(f"{'─' * 50}")
+        save_results(result_k, results_dir=args.results_dir, preprocess=args.preprocess)
+
+    # ── Comparison experiment (auto k=3 when k=5, or explicit --compare_k) ──
+    compare_k = args.compare_k
+    if compare_k is None and args.k == 5 and args.n_seeds >= 3:
+        compare_k = 3  # default: k=5 → compare with k=3
+
+    if compare_k is not None and compare_k != args.k:
         print("\n\n")
-        result_k10 = run_multi_seed_experiment(
-            k=10, seeds=seeds[:min(len(seeds), 3)], preprocess=args.preprocess,
+        result_compare = run_multi_seed_experiment(
+            k=compare_k, seeds=seeds[:min(len(seeds), 3)], preprocess=args.preprocess,
             X=X, y=y, wavelength_grid=wavelength_grid, le=le, meta_df=meta_df,
             plot=args.plot, save_plots_dir=args.save_plots,
+            methods=method_list,
         )
+
+        if args.save_results:
+            print(f"\n{'─' * 50}")
+            print(f"Saving k={compare_k} results to {args.results_dir}/")
+            print(f"{'─' * 50}")
+            save_results(result_compare, results_dir=args.results_dir, preprocess=args.preprocess)
+
+    if args.save_results:
+        print(f"\nAll results saved to: {os.path.abspath(args.results_dir)}/")
