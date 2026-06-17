@@ -176,7 +176,14 @@ The accuracy gap between Teacher (228λ) and Student (kλ) quantifies the cost o
 
 ### Accuracy by Wavelength Budget
 
-Results vary by preprocessing and method choice. Running with `savgol_1deriv` preprocessing and multi-seed evaluation produces stable, reproducible rankings. The Teacher baseline (full 228λ) typically achieves >0.98 accuracy; the best k-wavelength Student typically closes the gap to within <0.02 at k=5, demonstrating that 2–4 LEDs can approach lab-spectrometer performance.
+Results with `savgol_1deriv` preprocessing, 5 seeds × swatch-level 5-fold CV, 3 classes:
+
+| k | Teacher (228λ) | Random k | Best Method | Best Acc. (Pseudo) | Gap vs Teacher |
+|---|:---:|:---:|-------------|:---:|:---:|
+| **5** | 0.9904 ± 0.0039 | 0.9223 ± 0.0143 | RFE (Linear SVM) | 0.9819 ± 0.0087 | −0.0085 |
+| **3** | 0.9439 ± 0.0308 | 0.8007 ± 0.0601 | Mutual Information | 0.9150 ± 0.0469 | −0.0289 |
+
+Method spread at k=5: RFE (0.9819) through ANOVA F-score (0.9063 — actually below Random baseline). At k=5, the top 3 methods (RFE, MI, L1 LogisticRegression) all exceed 0.97, demonstrating that 5 LEDs can approach lab-spectrometer performance. At k=3, performance degrades substantially and only 2 consensus wavelengths emerge (both from the same N–H band), confirming that k=3 is too few for robust 3-class discrimination.
 
 ### Preprocessing Impact
 
@@ -189,20 +196,37 @@ Results vary by preprocessing and method choice. Running with `savgol_1deriv` pr
 
 ### Selected Wavelengths & Chemical Interpretation
 
-The most stable wavelengths typically map to chemically complementary absorption bands:
+**k=5 — RFE (Linear SVM), best method (Pseudo: 0.9819):**
 
-| λ (nm) | Chemical Bond | Fiber Class Distinguished |
-|--------|---------------|--------------------------|
-| **~1420** | O–H 1st overtone | Cotton (cellulose) |
-| **~1465** | N–H 1st overtone | Nylon (amide linkages) |
-| **~1510** | N–H 1st overtone | Nylon (polyamide) |
-| **~1545** | N–H 1st overtone | Nylon (amide) |
+| λ (nm) | Chemical Bond | Distinguishes |
+|--------|---------------|---------------|
+| **1173** | C–H 2nd overtone | PET, PA (polymer backbone) |
+| **1399** | O–H 1st overtone | Cotton (cellulose/water) |
+| **1442** | O–H 1st overtone | Cotton (cellulose/water) |
+| **1489** | N–H 1st overtone | Nylon (amide) |
+| **1658** | C–H 1st overtone | PET (aromatic CH); Cotton (O–H) |
 
-The O–H channel separates cellulose-based Cotton from synthetic fibers; the N–H channels distinguish Nylon from PET. Together, **two chemically orthogonal channels** achieve near-perfect 3-class discrimination.
+Three chemically distinct channels (C–H, O–H, N–H) together discriminate Cotton, Nylon, and PET. The two O–H wavelengths (1399, 1442 nm) capture different aspects of cellulose absorption.
+
+**k=3 — Mutual Information, best method (Pseudo: 0.9150):**
+
+| λ (nm) | Chemical Bond | Distinguishes |
+|--------|---------------|---------------|
+| **1506** | N–H 1st overtone | Nylon (amide) |
+| **1510** | N–H 1st overtone | Nylon (amide) |
+
+> ⚠ Only 2 consensus wavelengths (3rd did not reach majority across 5 seeds × 5 folds). Both are adjacent N–H band pixels — even with SG 1st-derivative, k=3 struggles with the adjacent-pixel problem. Accuracy drops to 0.915 (gap: −0.029 vs Teacher), and the single chemical channel cannot cleanly separate all 3 classes.
 
 ### Statistical Significance
 
-Wilcoxon signed-rank tests (n=5 seeds, α=0.05) compare each method against the Random baseline and the Teacher. With ≥5 seeds, the tests reliably identify methods that significantly outperform random selection.
+Wilcoxon signed-rank tests (n=5 seeds, α=0.05) compare each method against the Random baseline and the Teacher.
+
+| Experiment | Outcome |
+|------------|---------|
+| **k=5** | All comparisons: p=0.0625 (not significant) |
+| **k=3** | All comparisons: p ≥ 0.0625 (not significant) |
+
+> **Note**: With n=5, the Wilcoxon signed-rank test has a minimum possible p-value of 0.0625 (when all 5 seed-pairs rank in the same direction). Achieving statistical significance at α=0.05 requires ≥6 seeds. The consistent ranking order across seeds is informative, but formal significance would require a larger seed sample.
 
 ### Figures
 
@@ -271,7 +295,7 @@ python wavelength_selection/select_wavelengths.py --k 3 --methods "ANOVA F-score
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--k` | 5 | Number of wavelengths to select |
-| `--n_seeds` | 5 | Random seeds (≥5 required for Wilcoxon tests) |
+| `--n_seeds` | 5 | Random seeds (≥5 for Wilcoxon, ≥6 for α=0.05 significance) |
 | `--preprocess` | `none` | `none` / `savgol` / `savgol_1deriv` / `savgol_2deriv` |
 | `--seed` | `None` | Single seed override (disables multi-seed mode) |
 | `--methods` | all 5 | Comma-separated method names to include |
