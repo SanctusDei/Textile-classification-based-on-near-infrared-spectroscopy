@@ -72,6 +72,64 @@ warnings.filterwarnings('ignore')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Shuffled GroupKFold (compat for sklearn < 1.4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ShuffledGroupKFold:
+    """GroupKFold with shuffle support, compatible with sklearn < 1.4.
+
+    Shuffles group labels within each class independently, then assigns
+    groups to folds via round-robin per class. This ensures each class
+    is spread across folds (stratified-like) while keeping all spectra
+    from the same swatch together.
+
+    Different random_state values produce different train/test splits.
+    """
+    def __init__(self, n_splits=5, shuffle=True, random_state=None):
+        self.n_splits = n_splits
+        self.shuffle = shuffle
+        self.random_state = random_state
+
+    def split(self, X, y=None, groups=None):
+        if groups is None or y is None:
+            raise ValueError("groups and y must be provided")
+        unique_groups = np.unique(groups)
+        n_groups = len(unique_groups)
+        fold_assignments = np.full(n_groups, -1, dtype=int)
+
+        rng = np.random.RandomState(self.random_state) if self.shuffle else None
+
+        # Group groups by class for stratified assignment
+        group_to_class = {}
+        for g in unique_groups:
+            mask = groups == g
+            # All samples in a group share the same class
+            group_to_class[g] = y[mask][0]
+
+        # Process each class independently: shuffle → round-robin
+        for cls in np.unique(y):
+            cls_groups = [g for g in unique_groups if group_to_class[g] == cls]
+            if self.shuffle:
+                rng.shuffle(cls_groups)
+            for i, g in enumerate(cls_groups):
+                g_idx = np.where(unique_groups == g)[0][0]
+                fold_assignments[g_idx] = i % self.n_splits
+
+        # Yield splits
+        for fold in range(self.n_splits):
+            test_groups = unique_groups[fold_assignments == fold]
+            if len(test_groups) == 0:
+                continue  # skip empty folds (should not happen with n_splits <= min class count)
+            train_groups = unique_groups[fold_assignments != fold]
+            train_idx = np.where(np.isin(groups, train_groups))[0]
+            test_idx = np.where(np.isin(groups, test_groups))[0]
+            yield train_idx, test_idx
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        return self.n_splits
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Preprocessing
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -360,12 +418,17 @@ def analyze_consensus(
 ) -> Dict:
     """Analyze wavelength selection stability across folds.
 
+    Reports BOTH strict consensus (intersection) and selection frequency,
+    since adjacent wavelengths within the same chemical band are often
+    interchangeable — strict consensus underestimates true stability.
+
     Returns:
-        consensus: wavelengths in ALL folds
-        majority:  wavelengths in ≥ ceil(n_folds/2) folds
-        union:     wavelengths in ANY fold
-        stability: Jaccard index (|intersection| / |union|)
-        frequencies: dict {wavelength_idx: count}
+        consensus:    wavelengths in ALL folds (strict intersection)
+        majority:     wavelengths in ≥ ceil(n_folds/2) folds
+        union:        wavelengths in ANY fold
+        stability:    Jaccard index (|intersection| / |union|)
+        frequencies:  dict {wavelength_idx: count across folds}
+        top_freq:     top-k wavelengths by selection frequency with percentages
     """
     n_folds = len(selected_sets)
     intersection = reduce(lambda a, b: a & b, selected_sets)
@@ -381,6 +444,10 @@ def analyze_consensus(
 
     stability = len(intersection) / len(union) if union else 0
 
+    # Top-k by selection frequency (the proper metric for stability)
+    sorted_freq = sorted(freq.items(), key=lambda x: -x[1])
+    top_freq = [(idx, count, count / n_folds * 100) for idx, count in sorted_freq[:k]]
+
     return {
         'consensus': sorted(intersection),
         'majority': sorted(majority),
@@ -390,6 +457,52 @@ def analyze_consensus(
         'n_union': len(union),
         'stability_jaccard': stability,
         'frequencies': dict(freq),
+        'top_freq': top_freq,  # [(idx, count, pct), ...]
+    }
+
+
+def analyze_cross_seed_frequency(
+    all_selected_sets_raw: List[List[set]],
+    wavelength_grid: np.ndarray,
+    k: int,
+) -> Dict:
+    """Analyze wavelength selection frequency across ALL seeds × folds.
+
+    This is the most robust stability metric: counts how many times
+    each wavelength index was selected across all (n_seeds × n_folds)
+    independent runs.
+
+    Returns:
+        top_wavelengths:  list of (index, nm, count, pct) sorted by frequency
+        frequency_map:    dict {idx: pct} for all selected wavelengths
+        n_total_selections: total number of selection events (seeds × folds × k)
+    """
+    n_total = sum(len(sets) for sets in all_selected_sets_raw)  # seeds
+    n_selections_per_run = k * len(all_selected_sets_raw[0]) if all_selected_sets_raw else k * 5  # folds × k
+    n_total_opportunities = n_total * n_selections_per_run if n_total else 0
+
+    freq = defaultdict(int)
+    for seed_sets in all_selected_sets_raw:
+        for fold_set in seed_sets:
+            for idx in fold_set:
+                freq[idx] += 1
+
+    n_seeds = len(all_selected_sets_raw)
+    n_folds = len(all_selected_sets_raw[0]) if all_selected_sets_raw else 5
+    total_runs = n_seeds * n_folds
+
+    sorted_freq = sorted(freq.items(), key=lambda x: -x[1])
+    top_wavelengths = []
+    for idx, count in sorted_freq[:k]:
+        nm = wavelength_grid[idx]
+        pct = count / total_runs * 100
+        top_wavelengths.append((idx, nm, count, pct))
+
+    return {
+        'top_wavelengths': top_wavelengths,
+        'frequency_map': {idx: count / total_runs * 100 for idx, count in freq.items()},
+        'total_runs': total_runs,
+        'n_unique_selected': len(freq),
     }
 
 
@@ -539,14 +652,17 @@ def run_single_seed_experiment(
             'selected_sets': selected_sets,
         }
 
-        consensus_wl = (wavelength_grid[consensus_info['consensus']]
-                        if consensus_info['consensus']
-                        else wavelength_grid[consensus_info['majority'][:k]])
+        # ── Per-method output: frequency-based + strict consensus ──
+        top_freq = consensus_info['top_freq']
+        freq_str = ', '.join(
+            f"{wavelength_grid[idx]:.0f}nm ({pct:.0f}%)"
+            for idx, count, pct in top_freq[:k]
+        )
         print(f"    Hard:        {np.mean(fold_accs_hard):.4f} ± {np.std(fold_accs_hard):.4f}")
         print(f"    Pseudo-label: {np.mean(fold_accs_pseudo):.4f} ± {np.std(fold_accs_pseudo):.4f}")
-        print(f"    Consensus ({consensus_info['n_consensus']}/{k}): "
-              f"{[f'{w:.0f}' for w in consensus_wl[:k]]} nm")
-        print(f"    Stability (Jaccard): {consensus_info['stability_jaccard']:.2f}")
+        print(f"    Selection frequency (top-{k}): {freq_str}")
+        print(f"    Strict consensus: {consensus_info['n_consensus']}/{k}  |  "
+              f"Jaccard stability: {consensus_info['stability_jaccard']:.2f}")
 
     return results, teacher_baseline, random_baseline
 
@@ -653,7 +769,7 @@ def run_multi_seed_experiment(
         print(f"SEED = {seed}")
         print(f"{'─' * 50}")
         # Swatch-level CV: keep same fabric together
-        skf = GroupKFold(n_splits=5, shuffle=True, random_state=seed)
+        skf = ShuffledGroupKFold(n_splits=5, shuffle=True, random_state=seed)
         results, teacher_bl, random_bl = run_single_seed_experiment(
             X, y, wavelength_grid, skf, groups, k, seed, selection_methods
         )
@@ -744,22 +860,26 @@ def run_multi_seed_experiment(
     # ── Best Method: Wavelengths & Physical Interpretation ──
     print(f"\n  ── Best Method: {best_method} ──")
 
-    best_consensus_all_seeds = all_consensus[best_method]
-    all_consensus_wl = []
-    for ci in best_consensus_all_seeds:
-        if ci['consensus']:
-            all_consensus_wl.extend(ci['consensus'])
-        else:
-            all_consensus_wl.extend(ci['majority'][:k])
+    # Cross-seed frequency analysis (the proper stability metric)
+    best_raw_sets = all_selected_sets_raw[best_method]
+    freq_analysis = analyze_cross_seed_frequency(best_raw_sets, wavelength_grid, k)
 
-    wl_counter = Counter(all_consensus_wl)
-    top_wl_indices = [idx for idx, _ in wl_counter.most_common(k)]
+    top_wl_indices = [item[0] for item in freq_analysis['top_wavelengths']]
     best_wl_nm = wavelength_grid[top_wl_indices]
 
-    print(f"    Most stable wavelengths (nm): {[f'{w:.0f}' for w in best_wl_nm]}")
-    print(f"    Physical interpretation:")
-    for wl in best_wl_nm[:k]:
-        print(f"      {wl:.0f} nm — {interpret_wavelength(wl)}")
+    print(f"    Selection frequency across {freq_analysis['total_runs']} runs "
+          f"({len(seeds)} seeds × 5 folds):")
+    for idx, nm, count, pct in freq_analysis['top_wavelengths'][:k]:
+        band_info = interpret_wavelength(nm)
+        print(f"      {nm:>6.0f} nm  —  {pct:>5.0f}% ({count}/{freq_analysis['total_runs']})  —  {band_info}")
+
+    # Also report strict consensus for reference
+    best_consensus_all_seeds = all_consensus[best_method]
+    avg_consensus = np.mean([ci['n_consensus'] for ci in best_consensus_all_seeds])
+    avg_jaccard = np.mean([ci['stability_jaccard'] for ci in best_consensus_all_seeds])
+    print(f"    Strict consensus (avg across seeds): {avg_consensus:.1f}/{k}  |  "
+          f"Jaccard: {avg_jaccard:.2f}")
+    print(f"    Unique wavelengths ever selected: {freq_analysis['n_unique_selected']}")
 
     n_final = len(top_wl_indices)
     print(f"\n    Compression:  228 → {n_final} wavelengths ({(1 - n_final/228)*100:.0f}% reduction)")
@@ -799,6 +919,8 @@ def run_multi_seed_experiment(
         'best_wavelengths_nm': best_wl_nm,
         'best_indices': top_wl_indices,
         'all_consensus': all_consensus,
+        'freq_analysis': freq_analysis,  # cross-seed frequency analysis
+        'all_selected_sets_raw': all_selected_sets_raw,
         'X': X, 'y': y, 'wavelength_grid': wavelength_grid, 'le': le, 'meta_df': meta_df,
     }
 
@@ -840,23 +962,41 @@ def save_results(
         stats_df.to_csv(f"{prefix}_statistics.csv", index=False, float_format="%.4f")
         print(f"  ✓ Saved: {prefix}_statistics.csv")
 
-    # ── 3. Best wavelengths with physical interpretation ──
+    # ── 3. Best wavelengths with selection frequency ──
     from plotting import interpret_wavelength
-    wl_nm = result['best_wavelengths_nm']
-    indices = result['best_indices']
+    freq_data = result.get('freq_analysis', {})
+    top_wl = freq_data.get('top_wavelengths', [])
     wl_records = []
-    for rank, (idx, nm) in enumerate(zip(indices, wl_nm), start=1):
-        wl_records.append({
-            'Rank': rank,
-            'Index': idx,
-            'Wavelength_nm': f"{nm:.1f}",
-            'Interpretation': interpret_wavelength(nm),
-        })
+    if top_wl:
+        for rank, (idx, nm, count, pct) in enumerate(top_wl, start=1):
+            wl_records.append({
+                'Rank': rank,
+                'Index': idx,
+                'Wavelength_nm': f"{nm:.1f}",
+                'Frequency_pct': f"{pct:.0f}",
+                'Selection_count': f"{count}/{freq_data.get('total_runs', '?')}",
+                'Interpretation': interpret_wavelength(nm),
+            })
+    else:
+        # fallback
+        wl_nm = result['best_wavelengths_nm']
+        indices = result['best_indices']
+        for rank, (idx, nm) in enumerate(zip(indices, wl_nm), start=1):
+            wl_records.append({
+                'Rank': rank,
+                'Index': idx,
+                'Wavelength_nm': f"{nm:.1f}",
+                'Frequency_pct': '—',
+                'Selection_count': '—',
+                'Interpretation': interpret_wavelength(nm),
+            })
     wl_df = pd.DataFrame(wl_records)
     wl_df.to_csv(f"{prefix}_best_wavelengths.csv", index=False)
     print(f"  ✓ Saved: {prefix}_best_wavelengths.csv")
 
     # ── 4. Full experiment config + key metrics (JSON) ──
+    wl_nm = result['best_wavelengths_nm']
+    indices = result['best_indices']
     config = {
         'k': k,
         'n_seeds': n_seeds,
@@ -872,6 +1012,9 @@ def save_results(
         'best_wavelengths_nm': [f"{float(w):.1f}" for w in wl_nm],
         'best_wavelengths_indices': [int(i) for i in indices],
         'class_names': [str(c) for c in result['le'].classes_] if result.get('le') else [],
+        'avg_consensus': float(np.mean([ci['n_consensus']
+                              for ci in result.get('all_consensus', {}).get(result['best_method'], [])]
+                              )) if result.get('all_consensus') else None,
     }
     with open(f"{prefix}_experiment.json", 'w') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)

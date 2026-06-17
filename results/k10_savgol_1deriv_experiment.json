@@ -1,32 +1,42 @@
 {
-  "k": 5,
+  "k": 10,
   "n_seeds": 5,
   "preprocess": "savgol_1deriv",
   "n_wavelengths_total": 228,
   "best_method": "L1 LogisticRegression",
-  "best_score_pseudo": 0.9835617486924788,
+  "best_score_pseudo": 0.9835855781899925,
   "teacher_mean": 0.9656525186779856,
   "teacher_std": 0.011153551080417342,
-  "random_mean": 0.8719686581015104,
-  "random_std": 0.025098482532026994,
+  "random_mean": 0.9181336225249638,
+  "random_std": 0.016921080482618686,
   "best_wavelengths_nm": [
     "1655.2",
-    "1522.3",
+    "1415.9",
     "1412.6",
     "1658.2",
-    "1519.1"
+    "1522.3",
+    "1456.7",
+    "1519.1",
+    "1409.3",
+    "1453.4",
+    "1419.3"
   ],
   "best_wavelengths_indices": [
     212,
-    170,
+    138,
     137,
     213,
-    169
+    170,
+    150,
+    169,
+    136,
+    149,
+    139
   ],
   "class_names": [
     "2",
     "3",
     "4"
   ],
-  "avg_consensus": 1.0
+  "avg_consensus": 2.4
 }

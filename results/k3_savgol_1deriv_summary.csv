@@ -1,6 +1,6 @@
 Method,Hard_mean,Hard_std,Pseudo_mean,Pseudo_std,Delta_Teacher,Delta_Random,n_seeds
-Mutual Information,0.9296,0.0370,0.9150,0.0469,-0.0289,0.1143,5
-RFE (Linear SVM),0.9186,0.0394,0.9117,0.0419,-0.0321,0.1110,5
-ANOVA F-score,0.9096,0.0228,0.9086,0.0206,-0.0353,0.1079,5
-L1 LogisticRegression,0.9116,0.0218,0.9064,0.0346,-0.0374,0.1057,5
-Random Forest Imp.,0.7887,0.0347,0.7816,0.0521,-0.1622,-0.0191,5
+RFE (Linear SVM),0.9528,0.0189,0.9648,0.0093,0.0074,0.1117,3
+L1 LogisticRegression,0.9522,0.0039,0.9610,0.0092,0.0037,0.1080,3
+Mutual Information,0.9222,0.0326,0.9204,0.0338,-0.0369,0.0674,3
+ANOVA F-score,0.9191,0.0133,0.9098,0.0108,-0.0475,0.0568,3
+Random Forest Imp.,0.7793,0.0140,0.7912,0.0276,-0.1661,-0.0618,3

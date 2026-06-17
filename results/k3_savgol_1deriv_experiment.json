@@ -1,25 +1,28 @@
 {
   "k": 3,
-  "n_seeds": 5,
+  "n_seeds": 3,
   "preprocess": "savgol_1deriv",
   "n_wavelengths_total": 228,
-  "best_method": "Mutual Information",
-  "best_score_pseudo": 0.9150040470094515,
-  "teacher_mean": 0.9438562671349102,
-  "teacher_std": 0.03082151947613108,
-  "random_mean": 0.8007060129665804,
-  "random_std": 0.06007987173569576,
+  "best_method": "RFE (Linear SVM)",
+  "best_score_pseudo": 0.9647846066691569,
+  "teacher_mean": 0.9573422308057283,
+  "teacher_std": 0.005872477973735306,
+  "random_mean": 0.8530512475928435,
+  "random_std": 0.04128488651574745,
   "best_wavelengths_nm": [
     "1509.5",
-    "1506.3"
+    "1173.4",
+    "1515.9"
   ],
   "best_wavelengths_indices": [
     166,
-    165
+    70,
+    168
   ],
   "class_names": [
     "2",
     "3",
     "4"
-  ]
+  ],
+  "avg_consensus": 0.0
 }
