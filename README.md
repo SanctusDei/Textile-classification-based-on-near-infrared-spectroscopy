@@ -2,7 +2,7 @@
 
 > **From 228-pixel lab spectrometer to 2–4 LEDs — wavelength selection for portable NIR textile identification.**
 
-Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 bands). The full dataset contains 188 pure-fiber spectra across 6 classes, plus 40 blend spectra and 10 background spectra. The wavelength selection experiment uses 173 spectra from 3 classes. The project investigates feature selection methods to compress the full spectrum into a handful of key wavelengths, enabling deployment on low-cost portable hardware.
+Near-infrared (NIR) spectroscopy dataset for textile fiber classification, collected with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 sampling points). The full dataset contains 188 pure-fiber spectra across 6 classes, plus 40 blend spectra and 10 background spectra. The wavelength selection experiment uses 173 spectra from 3 classes. The project investigates feature selection methods to compress the full spectrum into a handful of key wavelengths, enabling deployment on low-cost portable hardware.
 
 ---
 
@@ -43,8 +43,8 @@ python wavelength_selection/select_wavelengths.py --k 3 --n_seeds 5 --preprocess
 | **Background spectra** | 10 (PVC reference) |
 | **Fabric images** | 60 (`.jpg`, in `data/raw/image/`) |
 | **Spectral range** | 900–1700 nm |
-| **Spectral bands** | 228 pixels (3.5 nm/px) |
-| **Instrument** | TI DLP NIRScan nano (SN 6460024) |
+| **Sampling points** | 228 |
+| **Instrument** | TI DLP NIRScan nano |
 
 | Class | Spectra | Swatches | Description |
 |-------|:--:|:--:|-------------|
@@ -170,7 +170,7 @@ The accuracy gap between Teacher (228λ) and Student (kλ) quantifies the cost o
 | Baseline | Meaning |
 |----------|---------|
 | **Teacher (228λ)** | Upper bound — full-spectrum, best model |
-| **Random k wavelengths** | Lower bound — randomly chosen bands, KNN classifier |
+| **Random k wavelengths** | Lower bound — randomly chosen sampling points, KNN classifier |
 
 ### Preprocessing Options
 
@@ -264,7 +264,7 @@ Textile-classification/
 ├── resume_description.md             # Resume-ready project bullets (CN/EN)
 │
 ├── data/
-│   ├── csv/                          # 188 pure-fiber spectra (228-band CSV)
+│   ├── csv/                          # 188 pure-fiber spectra (228-point CSV)
 │   ├── preprocessing/
 │   │   ├── Pure/                     # Spectra reorganized by class (7 subdirs: 3 kept + Acetate/Acrylic/Wool/Background)
 │   │   ├── Blends/                   # 40 blend spectra (4 blend ratios) + 5 fabric images
