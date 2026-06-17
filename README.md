@@ -74,7 +74,7 @@ Each swatch was measured under **multiple conditions** to capture intra-class va
 
 - **Multiple positions** across the fabric surface
 - **Multiple rotation angles** (0°, 90°)
-- **Multiple fold configurations** (single-layer, double-layer)
+- **Multiple fold configurations** (Single, 2-Fold, 4-Fold)
 
 ### Acquisition Parameters
 
