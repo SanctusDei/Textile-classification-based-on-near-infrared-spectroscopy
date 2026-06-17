@@ -5,8 +5,6 @@
 # Generated figures
 figures/
 
-# Experiment results
-results/
 
 # Python artifacts
 __pycache__/

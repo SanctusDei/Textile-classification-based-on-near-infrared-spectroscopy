@@ -1,0 +1,34 @@
+{
+  "k": 5,
+  "n_seeds": 5,
+  "preprocess": "savgol_1deriv",
+  "n_wavelengths_total": 228,
+  "best_method": "RFE (Linear SVM)",
+  "best_score_pseudo": 0.9818776671408251,
+  "teacher_mean": 0.9904125177809389,
+  "teacher_std": 0.003932416931565356,
+  "random_mean": 0.9222759601706969,
+  "random_std": 0.014282556799380203,
+  "best_wavelengths_nm": [
+    "1173.4",
+    "1489.2",
+    "1399.2",
+    "1658.2",
+    "1442.4"
+  ],
+  "best_wavelengths_indices": [
+    70,
+    160,
+    133,
+    213,
+    146
+  ],
+  "class_names": [
+    "Acetate",
+    "Acrylic",
+    "Cotton",
+    "Nylon",
+    "Polyester",
+    "Wool"
+  ]
+}

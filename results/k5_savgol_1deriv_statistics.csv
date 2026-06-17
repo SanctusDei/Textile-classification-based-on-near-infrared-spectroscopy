@@ -1,0 +1,11 @@
+Comparison,W,p_value,significant (α=0.05)
+ANOVA F-score vs Teacher,0.0000,0.0625,False
+ANOVA F-score vs Random k,1.0000,0.1250,False
+Mutual Information vs Teacher,0.0000,0.0625,False
+Mutual Information vs Random k,0.0000,0.0625,False
+RFE (Linear SVM) vs Teacher,0.0000,0.0625,False
+RFE (Linear SVM) vs Random k,0.0000,0.0625,False
+L1 LogisticRegression vs Teacher,0.0000,0.0625,False
+L1 LogisticRegression vs Random k,0.0000,0.0625,False
+Random Forest Imp. vs Teacher,0.0000,0.0625,False
+Random Forest Imp. vs Random k,0.0000,0.0625,False
