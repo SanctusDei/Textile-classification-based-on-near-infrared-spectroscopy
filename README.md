@@ -1,6 +1,6 @@
   # Textile Fiber Classification via Near-Infrared Spectroscopy
 
-  > **From 228-point lab spectrometer to 2–4 LEDs — wavelength selection for portable NIR textile identification.**
+  > **From 228-point lab spectrometer to a handful of LEDs — wavelength selection for portable NIR textile identification.**
 
   Near-infrared (NIR) spectroscopy dataset for textile fiber classification, acquired with a **TI DLP NIRScan nano** spectrometer (900–1700 nm, 228 sampling points). The full dataset comprises 188 pure-fiber spectra across 6 classes, 40 blend-fabric spectra, and 10 background reference spectra. The wavelength selection experiment uses 173 pure-fiber spectra from 3 classes. The project investigates feature selection methods to compress the full 228-point spectrum into a small set of key wavelengths, enabling deployment on low-cost portable hardware.
 
@@ -111,7 +111,7 @@
 
   ### Motivation
 
-  A lab-grade NIR spectrometer (228-point InGaAs array) costs **$2,000+**. By identifying k = 3–10 discriminative wavelengths, we can replace it with **fixed-wavelength LEDs + photodiodes** (~$30–50 per LED), reducing the bill of materials by **94–98%** while maintaining near-perfect classification accuracy.
+  A lab-grade NIR spectrometer (228-point InGaAs array) costs **$2,000+**. By identifying k = 3–10 discriminative wavelengths, we can replace it with **fixed-wavelength LEDs + photodiodes** (~$30–50 per LED), reducing the bill of materials by **80–94%** while maintaining near-perfect classification accuracy.
 
   ### Methods Compared (5 total)
 
@@ -141,13 +141,13 @@
   | Teacher **retrained per fold** | Prevents Teacher from leaking test knowledge to Student |
   | Multi-seed (5 seeds) | Reports mean ± std, not single-seed cherry-picking |
   | Wilcoxon signed-rank tests (α=0.05) | Statistical significance of method comparisons |
-  | Consensus wavelength analysis | Jaccard stability index; only stable wavelengths recommended for hardware |
+  | Band-level frequency analysis | Chemical absorption bands are the stable unit; single-point Jaccard underestimates true stability |
 
   ### Baselines
 
   | Baseline | Meaning |
   |----------|---------|
-  | **Teacher (228λ)** | Upper bound — full-spectrum, best model |
+  | **Teacher (228λ)** | Reference — full-spectrum model (internal CV selects best among SVM-RBF, RF, KNN) |
   | **Random k wavelengths** | Lower bound — randomly chosen sampling points, KNN classifier |
 
   ### Preprocessing Options
@@ -302,9 +302,11 @@
   # Structured results
   result['summary_df']           # pd.DataFrame — method comparison
   result['stats_df']             # pd.DataFrame — Wilcoxon test results
-  result['best_method']          # str — e.g., 'ANOVA F-score'
+  result['best_method']          # str — e.g., 'L1 LogisticRegression'
   result['best_wavelengths_nm']  # np.ndarray — selected wavelengths in nm
   result['best_indices']         # np.ndarray — array indices of selected wavelengths
+  result['band_analysis']        # dict — band-level selection frequency across all seeds×folds
+  result['freq_analysis']        # dict — per-wavelength selection frequency
   ```
 
   ---
